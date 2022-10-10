@@ -1,2 +1,44 @@
-# rr_coho
-Run reconstruction for coho salmon
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+# rrCoho
+
+<!-- badges: start -->
+
+[![Lifecycle:
+experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+[![CRAN
+status](https://www.r-pkg.org/badges/version/rrCoho)](https://CRAN.R-project.org/package=rrCoho)
+<!-- badges: end -->
+
+Functions associated with
+
+-   data compilation
+    -   escapements
+        -   counts from hatchery facilities
+        -   estimates from in-situ spawning and other surveys
+    -   catches
+        -   commercial net reporting
+        -   estimates from recreational harvest and encounters
+    -   code wire tags
+-   assignment to relevant stock units
+-   outputs
+
+## Installation
+
+You can install the development version of rrCoho from
+[GitHub](https://github.com/) with:
+
+``` r
+# install.packages("devtools")
+devtools::install_github("FRAMverse/rrCoho")
+```
+
+## Example
+
+This is a basic example which shows you how to solve a common problem:
+
+``` r
+#library(rrCoho)
+## basic example code
+```
