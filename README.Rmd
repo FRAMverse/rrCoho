@@ -35,7 +35,7 @@ Functions associated with
 
 ## Installation
 
-You can install the development version of rrCoho from [GitHub](https://github.com/) with:
+You can install the development version of [rrCoho from GitHub](https://github.com/FRAMverse/rrCoho) with:
 
 ``` r
 # install.packages("devtools")
