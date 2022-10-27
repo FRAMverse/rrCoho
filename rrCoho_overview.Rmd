@@ -14,21 +14,48 @@ output:
     toc_float: yes
     code_folding: hide
 ---
----
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, results = FALSE, warning = FALSE, message = FALSE, fig.width = 9, fig.height = 9)
 
 library("tidyverse")
-#library("odbc"); library("DBI")
 library("gt")
+
+library("framr")
+
+lu <- list(
+  crc_fram = as_tibble(framr::lu_coho_crc_fram),
+  tocas_fram = as_tibble(framr::lu_coho_tocas_fram),
+  
+  fram_ca = readr::read_csv("lu_FRAM_rrterm_CA.csv"),
+  ca_pr_mu = readr::read_csv("lu_rrterm_CA_PR_MU.csv")
+)
 
 data_in <- list()
 
 # params:
-#   fp_escp:
-#   fp_hvst:
+#   file_escp:
+#     - target version of CoTC escapement compilation file? Not yet a function since just a simple readxl
+#   file_crc:
+#     - target sport harvest mdb; this can/should change if/when a directly query-able resource becomes available
+#   file_tocas:
+#     - target for TOCAS query dataset
 ```
+
+
+https://fisheriesservices.nwifc.org/fram-model-runs/preseason-fram-model-preparation/salmon-run-reconstruction-puget-sound/
+
+-CWT assignment is to FRAM units first
+  - fishery via rec_loc_code
+  - stock via ...? RMIS fields of some sort
+-Fisheries sequential within PR?!?
+-user choice to alter flagging for use of CWTs --> actually this is the "sequential" aspect, moving in from pre-terminal
+  -MB codified ruleset for when to "turn-off"
+-MSFs require "tricking" via small PEF (fishery-year specific based on regs) values of 0.0001
+  -MB suggest improving this, perhaps via something like an MSF flag
+  -this may have been the point at which 2006 Packer development stalled? Due to lack of marked-catch data 
+-recall HC is copy-paste from regional Cindy Gray RR
+
 
 # Established lookups
 
@@ -63,17 +90,22 @@ Move these into `data/` via `use_data()`?
 ```{r}
 rr$lu_mu
 
-rr$lu_ca |> 
-  select(FisheryID = FRAM_CA_Number, CA_Number, CA_Short_Name, CWT_Flag, Cat_Flag, Type_Calc) |>
-  write_csv("lu_rrterm_CA_FRAM.csv")
-
-rr$lu_ca_mu
+# #mapping FRAM FisheryIDs to RRterm CA catch areas
+# rr$lu_ca |> 
+#   select(FisheryID = FRAM_CA_Number, CA_Number, CA_Short_Name, CWT_Flag, Cat_Flag, Type_Calc) |>
+#   write_csv("lu_rrterm_CA_FRAM.csv")
+# 
+# #mapping RRterm fishery CAs to stock PR+PR_MU
+# #the key crosswalk to assign catches to associated stocks
+# rr$lu_ca_mu |> 
+#   mutate(PR_MU = paste(PR_Number, PR_MU_Number, sep = "_")) |> 
+#   write_csv("lu_rrterm_CA_PR_MU.csv")
 
 ```
 
 # Escapement
 
-depends on current format of *fram_coho_escapement_YEAR.xlsx* file
+expects/relies on current format of *fram_coho_escapement_YEAR.xlsx* file
 
 reads 'dataset' sheet and wrangles to 'RRTerm' summarization by PR + PR_MU
 
@@ -81,13 +113,17 @@ easily modified if replacement maintains comparable "view" of PR & PR_MU fields 
 
 but underlying compilation of values in 'dataset' only partially scriptable; see fram_coho_escapement_2022.R for hatchery queries etc.
 
-```{r}
+```{r read_escp}
 data_in$escp <- readxl::read_excel(
   path = "copy_of_fram_coho_escapement_2022.xlsx",
   sheet = "dataset"
 )|> 
-  group_by(year, PR = RRTerm_PR, PR_MU = RRTerm_PR_MU) |> 
-  summarise(escp = sum(escp_val, na.rm = T)) 
+  group_by(year, RRTerm_PR, RRTerm_PR_MU) |> 
+  summarise(escp = sum(escp_val, na.rm = T), .groups = "drop") |> 
+  mutate(
+    PR_MU = paste(RRTerm_PR, RRTerm_PR_MU, sep = "_"),
+    across(c(year, escp), as.integer)
+    )
 
 data_in$escp |> filter(year == 2019)
 
@@ -95,11 +131,7 @@ data_in$escp |> filter(year == 2019)
 
 # Catches
 
-Hopefully some/all of this gets revised to query the combined data source project from Eric K/Brodie/others?
-
-## Commercial: FishTix
-
-## Commercial: TOCAS
+Hopefully some/all of this gets revised to query the combined data source ("HarvestCube") project from JohnChen/Eric K/Brodie?
 
 ## Recreational: CRC
 
@@ -109,7 +141,7 @@ Hopefully some/all of this gets revised to query the combined data source projec
 db_crc <- "T:/DFW-Salmon Mgmt Modeling Team - General/Catch datasets/CRC/Sport Harvest Estimates 20220302.mdb"
 db_con <- dbConnect(drv = odbc(), .connection_string = paste0("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=",db_crc,";"))
 
-crc_coho <- dplyr::left_join(
+data_in$crc <- dplyr::left_join(
   dplyr::collect(dplyr::tbl(db_con, "Catch")) |> 
     dplyr::mutate(dplyr::across(ends_with("Date"), ~as.Date(., format = "%m/%d/%Y"))) 
   , 
@@ -140,7 +172,7 @@ dbDisconnect(db_con)
 
 ```
 
-**Notes**
+**Notes from CohoFRAM_PostSeasonwMZ_RR_SportFisheryInputs_111021.R**
 
 > #MB Because use of this data is often to utilize a catch number if it exists, by default data should be non-zero.
 #Thus, I'm going to remove these zero values.  Not in all analysis or uses will it be appropriate to remove these!
@@ -158,118 +190,322 @@ Based on `catchstatmonth` ignoring start/end dates outside single month
 
 Persisted CRC~FRAM LU as assigned.
 
-But need? 
+```{r crc_assign_fram_id}
+data_in$crc <- rrCoho::assign_fram_fishery_to_crc(data_in$crc)
+
+##unassigned
+#data_in$crc |> filter(is.na(FisheryID)) |> count(area_code, areaname) |> arrange(area_code) |> print(n=100)
+
+```
+
+Does *lu$ca_fram* render this unnecessary? 
+
 >#To generate ouput of landings data for use in old RRTerm for Coho RR. Use a translation table to combine and translate FRAM_FisheryID to OldRR CA_Number - ONLY includes Strait Juan de Fuca + Puget Sound!
 fisheryRR <- read.csv( "C:/Users/mbellman/Documents/Run_Reconstruction/Coho/MB_Draft_2020/ReferenceFiles_4Rcode/FRAMFisheryID_2_RRTermCANumber.csv", header=T)
 
-```{r crc_coho_assign_fram_id}
-crc_coho <- crc_coho |> 
-  mutate(
-    FisheryID = case_when(
-      area_code == "01" ~ 33, #A1-Ast Spt
-      area_code == "02" ~ 37, #Area 2 Spt
-      area_code == "03" ~ 40, #Area 3 Spt
-      area_code == "04" ~ 41, #Area 4 Spt
-      area_code == "21" ~ 45, #Willpa Spt, marine only
-      area_code %in% c(
-        '305','375',
-        '377','378','379',
-        '382','384','389',
-        '390','422','424') ~ 46,  #Wlp Tb Spt, freshwater only
-      area_code == "22" ~ 48, #GryHbr Spt
-      area_code %in% c('342','367') ~ 49, #SGryHb Spt, (342=Elk River, 367=Johns River)
-      area_code %in% c('358','361','362') ~ 51,  #Hump R Spt, freshwater only
-      area_code %in% c(
-        '315','317','319',
-        '325','333','370',
-        '419','706','321') ~ 54, #Chehal Spt, freshwater only (?including Quigg Lake=370)
-      #MarleneB: FisheryID = 58,59,60,61 - roll into FisheryID=54, to align with how pre-season inputs are calculated
-      area_code == 337 ~ 54, #Wynoch Spt FisheryID 58
-      area_code == 355 ~ 54, #Hoquam Spt FisheryID 59
-      area_code == 335 ~ 54, #Wishkh Spt FisheryID 60
-      area_code %in% c('329','331') ~ 54, #Satsop Spt FisheryID 61
-      area_code %in% c(
-        '327','410','412','408') ~ 62,  #Quin R Spt; no FRAM BP
-      area_code == 394 ~ 65, #(Queets Spt)
-      #MarleneB FisheryID = 66,67 - roll into 65, to align with how pre-season inputs are calculated
-      area_code == 392 ~ 65, #Clrwtr Spt FisheryID 66
-      area_code == 396 ~ 65, #Salm R Spt FisheryID 67
-      area_code %in% c(
-        '398','400',
-        '402','404','406') ~ 70, #Quilly Spt
-      area_code %in% c(
-        '348','350','352') ~ 73, #Hoh R Spt
-      #No FRAM BP for F76 Makah Tributary Sport
-      #MarleneB: perhaps Big River (Clallam Co) = 386, Sooes River (Clallam Co) = 418, Waatch River = 420
-      area_code %in% c(
-        '782','822','772') ~ 89, #EJDF FWSpt no BP available
-      area_code %in% c(
-        '718','726','740',
-        '752','768','810',
-        '814','818','882') ~ 90, #WJDF FWSpt
-      area_code == '05' ~ 91, #Area 5 Spt
-      area_code == '06' ~ 92, #Area 6 Spt
-      area_code == '07' ~ 93, #Area 7 Spt
-      area_code %in% c('738','311') ~ 94, #Dung R Spt
-      area_code == '742' ~ 95, #ElwhaR Spt
-      
-      #MarleneB: not included; 724-Dakotah Creek into 7A directly, 884-Whatcom Creek into 7B directly
-      area_code %in% c(
-        '788','790',
-        '792','794','838') ~ 99, #Nook R Spt
-      area_code == '816' ~ 100, #Samh R Spt
-      area_code == '81' ~ 106, #Ar 8-1 Spt
-      area_code == '09' ~ 107, #Area 9 Spt
-      area_code %in% c(
-        '824','825','826',
-        '828','830','832') ~ 108, #Skag R Spt
-      area_code == '82' ~ 115, #Ar 8-2 Spt
-      area_code %in% c(
-        '866','872','874','876') ~ 116,  #Stilg R Spt
-      area_code %in% c(
-        '840','844','846',
-        '848','850','852',
-        '858','860') ~ 117, #Snoh R Spt, including Wallace, Skykomish, Snoqualmie, Pilchuck
-      area_code == '10' ~ 118, #Ar 10 Spt
-      area_code == '746' ~ 127, #Duwm R Spt
-      area_code %in% c(
-        '712','760','762','764') ~ 128, #L WaSm Spt
-      area_code == '11' ~ 129, #Ar 11 Spt
-      area_code %in% c(
-        '802','804','806','808') ~ 135, #Puyl R Spt
-      area_code == '13' ~ 136, #Ar 13 Spt
-      area_code %in% c(
-        '708','714','720',
-        '744','754','770',
-        '774','776','778',
-        '798','820') ~ 149, #13D-K TSpt
-      area_code == '786' ~ 150, #Nisq R Spt
-      area_code == '728' ~ 151, #Desc R Spt
-      area_code == '12' ~ 152, #Ar 12 Spt
-      area_code %in% c(
-        '702','734','736','750') ~ 163, #1212B TSpt
-      area_code %in% c('766','812') ~ 164, #12A Tb Spt
-      area_code %in% c('732','878','880') ~ 165, #12C-D TSpt
-      area_code %in% c('796','834','836') ~ 166 #Skok R Spt
-    )
-  )
-
-#crc_coho |> filter(is.na(FisheryID)) |> count(area_code, areaname) |> arrange(area_code) |> print(n=100)
-
+```{r}
+#this matches the commented code in MB script showing head of her "FRAMFisheryID_2_RRTermCANumber.csv"
+lu$ca_fram |> filter(between(FisheryID, 91, 99))
 ```
 
 This appears to work to assign RRTerm CA?
 
-```{r}
-lu_fram_ca <- readr::read_csv("lu_rrterm_CA_FRAM.csv")
+Seems catches only summed from FRAM timestep 3+4+5 (Aug+Sep+Oct-Nov). Undesirable.
 
-crc_coho |> 
+>## SELECT A OR B BELOW  #############################################
+# # A. #MB recommended to use FRAM TS 3+4+5 for all fisheries
+# ca_catch2_TS <- ca_catch2[which(ca_catch2$TimeStep %in% c('3','4','5')),]
+# dim(ca_catch2_TS) #2158  7
+# unique(ca_catch2_TS$TimeStep)
+
+># B. #JH method uses only TS 3+4+5 for Freshwater fisheries and TS 4+5 for marine fisheries.
+>#MB Update to include final revision for Hood Canal, where JH summarizes all fisheries TS 3+4+5.
+ca_catch2_F <- rawdata5[which((rawdata5$RRTermType=="FW" & rawdata5$TimeStep %in% c('3','4','5'))),]
+ca_catch2_M <- rawdata5[which((rawdata5$RRTermType=="M" & rawdata5$TimeStep %in% c('4','5'))),]
+ca_catch2_HC <- rawdata5[which((rawdata5$FisheryID %in% c(152:166) & rawdata5$RRTermType=="M" & rawdata5$TimeStep %in% c('3'))),]
+ca_catch2_TS <- rbind(ca_catch2_F, ca_catch2_M, ca_catch2_HC)
+dim(ca_catch2_TS) #3460  26
+unique(ca_catch2_TS$TimeStep) # 3 5 4 
+CA_Catch_F <- ddply(ca_catch2_TS,.(Run_ID=CatchYear, CA_Number=RRTerm_CA_Number,CA_Short_Name),summarise, Catch=sum(CatchEst,na.rm=T), Catch_CV=sum(CatchVariance,na.rm=T))
+
+```{r}
+
+data_in$crc |> 
   drop_na(FisheryID) |> 
   filter(year == 2019) |> 
-  inner_join(lu_fram_ca, by = "FisheryID") |> 
-  inner_join(rr$lu_ca_mu, by = "CA_Number")
+  inner_join(lu$ca_fram, by = "FisheryID") |> 
+  #do not want to implement
+  filter(ts > 2) |> 
+  #no idea how CWT_Flag, Cat_Flag, Type_Calc are used
+  group_by(year, FisheryID, CA_Number, CA_Short_Name, CWT_Flag, Cat_Flag, Type_Calc) |> 
+  summarise(across(catchest, sum), .groups = "drop") |> #count(FisheryID, CA_Number) |> filter(n>1)
+  #this would then associate stock units per fishery/CA
+  inner_join(lu$ca_pr_mu, by = c("CA_Number", "CA_Short_Name")) |> 
+  #and then escp, tocas, etc.
+  inner_join(data_in$escp |> select(year, PR_MU, escp), by = c("year", "PR_MU")) |> 
+  group_by(year, FisheryID, CA_Number) |> 
+  mutate(
+    pct_escp = escp / sum(escp),
+    catchest_pct_escp = catchest * pct_escp
+    ) |> 
+  group_by(year, PR_MU, MU_Short_Name) |> 
+  summarise(escp = first(escp), crc = sum(catchest_pct_escp), .groups = "drop")
 
 
+```
+
+## Commercial: TOCAS
+
+**Notes from CohoFRAM_PostSeason_RR_CommCatchInputs_MB111221**
+
+>#######################################################################################
+#TO QUERY RAW DATA (http://access.nwifc.org/webapps/index.asp)
+#In Tribal Online Accounting System (TOCAS) interface, the query is structured as follows:
+>#Biological Reports
+>#TOCAS/WAFT
+#Breaks: SpeciesName, Fishery, Gear, GearName, Catch Area, Disposition, Landing Date, Tribe Name.
+#Select - TOCAS Filled with WAFT Data
+#Values:  Select - Units
+#Criteria:
+# Species Selected =  
+# 004 - COHO
+# 044 - COHO AQUACULTURE (Note: no results, but keep in query to see if any show-up....)
+# (Do not include 874 - COHO EGGS)
+# Tribes Selected = ALL
+# Gears Selected = ALL
+# Areas Selected = ALL
+# Disposition Selected = ALL
+# Dealers Selected = ALL
+# 
+# Begin Date = 01/01/1986,  End Date = 12/31/2020  (modify as needed)
+#Save the raw data in a .csv file on your computer.
+
+
+```{r tocas_case_when}
+#Fishery==1 & Gear_type=="Troll" & Catch_Area %in% c('1') ~ 34  #(A1-Ast Troll)
+#Fishery==1 & Gear_type=="Troll" & Catch_Area %in% c('2') ~ 35  #(Area2TrlNT)
+#Fishery==2 & Gear_type=="Troll" & Catch_Area %in% c('2') ~ 36  #(Area2TrlTR)
+#Fishery==1 & Gear_type=="Troll" & Catch_Area %in% c('3') ~ 38  #(Area3TrlNT)
+#Fishery==2 & Gear_type=="Troll" & Catch_Area %in% c('3') ~ 39  #(Area3TrlTR)
+#Fishery==1 & Gear_type=="Troll" & Catch_Area %in% c('4','4A','4B') ~ 42  #(A4/4BTrlNT)
+#Fishery==2 & Gear_type %in% c('Troll','Hook&Line') & Catch_Area %in% c('4','4A','4B') ~ 43  #(A4/4BTrlTR)
+#Fishery==2 & Gear_type %in% c('Troll','Hook&Line') & Catch_Area %in% c('5','6','6C','6A','6B') ~ 44  #(A5-6CTroll)
+#Fishery==1 & Gear_type=="Net" & Catch_Area %in% c('2G','2H','2K','2J','2M','2N','2R','2T','2U') ~ 47  #(WlpaBT Net)
+#Fishery==1 & Gear_type=="Net" & Catch_Area %in% c('2A','2B','2C','2D') ~ 50       #(GryHbr Net)
+#Fishery==2 & TribeName=="QUINAULT - 18" & Gear_type=="Net" & Catch_Area %in% c('72B','2A','2B','2D') ~ 52  #(LwCheh Net)
+#Fishery==2 & Gear_type=="Net" & Catch_Area %in% c('72F','2C') ~ 55       #(Hump R Net)
+#Fishery==2 & TribeName=="CHEHALIS - 02" & Gear_type=="Net" & Catch_Area %in% c('72B') ~ 56  #(UpCheh Net)
+#Fishery==2 & Gear_type%in% c('Net','Hook&Line') & Catch_Area %in% c('72O','72P','72W') ~ 63       #(Quin R Net)
+#Fishery==2 & Gear_type=="Net" & Catch_Area %in% c('73C','73G') ~ 68     #(Queets Net)
+#Fishery==2 & Gear_type=="Hook&Line" & Catch_Area %in% c('73C','73G') ~ 69     #(Queets C&S) Larry Gilbertson (Quinault Tribe), double check
+#Fishery==2 & Gear_type=="Net" & Catch_Area %in% c('73H','73J','73D','73A','73B') ~ 71     #(Quilly Net)
+#Fishery==2 & Gear_type=="Net" & Disposition=="C&SF" & Catch_Area %in% c('73H','73J','73D','73A','73B') ~ 72     #(Quilly C&S) Chris Northcut (Quillayute Tribe) double check
+#Fishery %in% c('2','5') & Gear_type=="Net" & Catch_Area %in% c('73E') ~ 74     #(Hoh R Net)
+#MB assume that fishery=5 mixed is from test fisheries? (COMM catch, set gill net, 2010 record, Month 9) or could be key error for fishery=2
+#Fishery==2 & Gear_type!="Net" & Catch_Area %in% c('73E') ~ 75                 #(Hoh R C&S) Joe Gilbertson (HohTribe ) double check
+#Fishery==2 & Gear_type %in% c('Net','Hook&Line') & Catch_Area %in% c('74D','74C','74A') ~ 77       #(Mak FW Net)
+#Fishery==1 & Gear_type=="Net" & Catch_Area %in% c('4B','5','6C') ~ 80  #(A4B6CNetNT)
+#Fishery==2 & Gear_type=="Net" & Catch_Area %in% c('4B','5','6C') ~ 81  #(A4B6CNetTR)
+#Fishery==1 & Gear_type=="Net" & Catch_Area=='6D' ~ 82  #(Ar6D NetNT)
+#Fishery==2 & Gear_type%in% c('Net','Hook&Line') & Catch_Area %in% c('6D','76A') ~ 83  #(Ar6D NetTR)
+#Fishery==2 & Gear_type%in% c('Net','Hook&Line') & Catch_Area=='76B' ~ 84  #(Elwha Net)
+#Fishery==2 & Gear_type%in% c('Net','Hook&Line') & Catch_Area %in% c('74B','74E','75E','75D','75G','75B','75A','75C','75F','75D') ~ 85  #(WJDF T Net)
+#Fishery==1 & Gear_type=="Net" & Catch_Area %in% c('6','6A','6B','7','7A','7E') ~ 87  #(A6-7ANetNT)
+#Fishery==2 & Gear_type=="Net" & Catch_Area %in% c('6','6A','6B','7','7A','7E') ~ 88  #(A6-7ANetTR)
+#Fishery==1 & Gear_type=="Net" & Catch_Area %in% c('7B','7C','7D') ~ 96  #(A7BCDNetNT)
+#Fishery==2 & Gear_type=="Net" & Catch_Area %in% c('7B','7C','7D') ~ 97  #(A7BCDNetTR)
+#Fishery==2 & Gear_type=="Net" & Catch_Area %in% c('77B','77C') ~ 98  #(Nook R Net)
+#Fishery==1 & Gear_type=="Net" & Catch_Area=='8' ~ 101  #(Ar 8 NetNT)
+#Fishery==2 & Gear_type=="Net" & Catch_Area=='8' ~ 102  #(Ar 8 NetTR)
+#Fishery==2 & Gear_type=="Net" & Catch_Area %in% c('78C','78c','78D','78d','78O','78P','78p','78B') & !(Disposition %in% c('TEST','Test')) ~ 103  #(Skag R Net)
+#Fishery==2 & Gear_type=="Net" & Catch_Area %in% c('78C','78D','78d','78P','78p','78B') & Disposition %in% c('TEST','Test') ~ 104  #(SkgR TsNet)
+#Fishery==1 & Gear_type=="Net" & Catch_Area=='8A' ~ 109  #(Ar8A NetNT)
+#Fishery==2 & Gear_type%in% c('Net','Hook&Line') & Catch_Area=='8A' ~ 110  #(Ar8A NetTR)
+#Fishery==1 & Gear_type=="Net" & Catch_Area %in% c('8d','8D') ~ 111  #(Ar8D NetNT)
+#Fishery==2 & Gear_type%in% c('Net','Hook&Line') & Catch_Area %in% c('8d','8D') ~ 112  #(Ar8D NetTR)
+#Fishery==2 & Gear_type=="Net" & Catch_Area=='78G' ~ 113  #(Still R Net)
+#Fishery==2 & Gear_type=="Net" & Catch_Area %in% c('78E','78A','78N','78H','78F') ~ 114  #(Snoh R Net)
+#Fishery==1 & Gear_type=="Net" & Catch_Area=='10' ~ 119  #(Ar10 NetNT)
+#Fishery==2 & Gear_type=="Net" & Catch_Area%in% c('10','80C') ~ 120  #(Ar10 NetTR)
+#Fishery==1 & Gear_type=="Net" & Catch_Area %in% c('10A','10a') ~ 121  #(Ar10ANetNT)
+#Fishery==2 & Gear_type=="Net" & Catch_Area %in% c('10A','10a') ~ 122  #(Ar10ANetTR)
+#Fishery==1 & Gear_type=="Net" & Catch_Area=='10E' ~ 123  #(Ar10ENetNT)
+#Fishery==2 & Gear_type=="Net" & Catch_Area=='10E' ~ 124  #(Ar10ENetTR)
+#Fishery==2 & Gear_type=="Net" & Catch_Area %in% c('10F','10G','10g','80A','10B','10C','10D') ~ 125  #(10F-G Net)
+#Fishery==2 & Gear_type%in% c('Net','Hook&Line') & Catch_Area=='80B' ~ 126  #(Duwm R Net)
+#Fishery==1 & Gear_type=="Net" & Catch_Area=='11' ~ 130  #(Ar11 NetNT)
+#Fishery==2 & Gear_type=="Net" & Catch_Area=='11' ~ 131  #(Ar11 NetTR)
+#Fishery==1 & Gear_type=="Net" & Catch_Area=='11A' ~ 132  #(Ar11ANetNT)
+#Fishery==2 & Gear_type=="Net" & Catch_Area=='11A' ~ 133  #(Ar11ANetTR)
+#Fishery %in% c('2','5') & Gear_type%in% c('Net','Hook&Line') & Catch_Area %in% c('81B','81C','81A') ~ 134  #(Puyl R Net)
+#Fishery==1 & Gear_type=="Net" & Catch_Area%in% c('13','13C') ~ 137  #(Ar13 NetNT)
+#Fishery==2 & Gear_type=="Net" & Catch_Area%in% c('13','13C','83H') ~ 138  #(Ar13 NetTR)
+#Fishery==1 & Gear_type=="Net" & Catch_Area=='13C' ~ 139  #(Ar13CNetNT)- Gets Rolled into Ar13 Net
+#Fishery==2 & Gear_type=="Net" & Catch_Area=='13C' ~ 140  #(Ar13CNetTR)- Gets Rolled into Ar13 Net
+#Fishery==1 & Gear_type=="Net" & Catch_Area=='13A' ~ 141  #(Ar13ANetNT)
+#Fishery==2 & Gear_type=="Net" & Catch_Area%in% c('13A','83C') ~ 142  #(Ar13ANetTR)
+#Fishery==1 & Gear_type=="Net" & Catch_Area=='13D' ~ 143  #(Ar13DNetNT)
+#Fishery%in% c('2','5') & Gear_type=="Net" & Catch_Area=='13D' ~ 144  #(Ar13DNetTR)
+#Fishery==1 & Gear_type=="Net" & Catch_Area %in% c('13B','13E','13F','13G','13H','13I','13J','13K') ~ 145  #(Ar13FKNetNT)
+#Fishery==2 & Gear_type=="Net" & Catch_Area %in% c('13B','13E','13F','13G','13H','13I','13J','13K','83A','83B') ~ 146  #(Ar13FKNetTR)
+#Fishery==2 & Gear_type=="Net" & Catch_Area=='83D' ~ 147  #(Nisq R Net)
+#Fishery==2 & Gear_type=="Net" & Catch_Area=='83F' ~ 148  #(McAlls Net)
+#Fishery==1 & Gear_type=="Net" & Catch_Area %in% c('12','12B') ~ 153  #(1212BNetNT)
+#Fishery==2 & Gear_type=="Net" & Catch_Area %in% c('12','12B','82C','82D') ~ 154  #(1212BNetTR)  (need 82D-Skok Tribe only)
+#Fishery==1 & Gear_type=="Net" & Catch_Area %in% c('9A') ~ 155  #(Ar9ANetNT)
+#Fishery==2 & Gear_type%in% c('Net','Hook&Line') & Catch_Area %in% c('9A') ~ 156  #(Ar9ANetTR)
+#Fishery==2 & Gear_type%in% c('Net','Hook&Line') & Catch_Area %in% c('9') & Disposition!="TEST" ~ 156  #(Ar9ANetTR)
+#Fishery==1 & Gear_type=="Net" & Catch_Area=='12A' ~ 157  #(Ar12ANetNT)
+#Fishery==2 & Gear_type%in% c('Net','Hook&Line') & Catch_Area=='12A' ~ 158  #(Ar12ANetTR)
+#Fishery==1 & Gear_type=="Net" & Catch_Area %in% c('12C','12D','12H') ~ 159  #(Ar12CDNetNT)
+#Fishery==2 & Gear_type%in% c('Net','Hook&Line') & Catch_Area %in% c('12C','12D','12H','82H','82I','82B') ~ 160  #(Ar12CDNetTR)  (need 82B-Skok Tribe only)
+#Fishery==2 & Gear_type%in% c('Net','Hook&Line') & Catch_Area %in% c('82G','82J') ~ 161  #(Skok R Net)
+#Fishery==2 & Gear_type%in% c('Net','Hook&Line') & Catch_Area=='82F' ~ 162  #(Quilcn Net)
+
+```
+
+
+## Commercial: FishTicket
+
+MB appears to have used TOCAS exclusively.
+
+```{r ft_pull, eval=FALSE}
+#con_ft <- assign connection here
+
+#Not limited to PS commercial in FRAM - various ColR and coastal catches...
+ft_pull <- inner_join(
+  tbl(con_ft, dbplyr::in_schema(schema = "Reporting", table = "vFishTicketCat2")),
+  tbl(con_ft, dbplyr::in_schema(schema = "Reporting", table = "vFishTicketDetailCat2"))
+  , by = c("FishTicketID")
+  ) |> 
+  filter(
+    ReleaseStatus == "Completed",
+    MarketSpeciesCategoryName == "COHO",
+    BatchYear >= 2015, 
+    LegalAuthoritySourceCode != "impt",
+    LegalAuthoritySourceCode != "invo",
+    LegalAuthoritySourceCode != "aqua"
+  ) |> 
+  group_by(
+    BatchYear, LandingMonth,
+    CatchAreaCode, CatchAreaDescription,
+    FisherTypeDescription, GearCode
+  ) |> 
+  summarize(rc = sum(ReportedCount), .groups = "drop") |>  #server-side '.group = "drop"' not working; adds a new field "group" and retains groups
+  collect() |> 
+  mutate(
+    across(contains("AreaCode"), str_trim),
+    gear = if_else(GearCode %in% c(10,41), "line", "net"),
+  ts = case_when(
+    LandingMonth < 7 ~ 1,
+    LandingMonth == 7 ~ 2,
+    LandingMonth == 8 ~ 3,
+    LandingMonth == 9 ~ 4,
+    LandingMonth > 9 ~ 5
+    )
+  )
+
+DBI::dbDisconnect(con_ft)
+
+rm(con_ft)
+
+saveRDS(ft_pull, "temp_ft_pull.rds")
+```
+
+```{r}
+ft_pull <- readRDS("temp_ft_pull.rds")
+
+ft_pull |> 
+  #distinct(CatchAreaCode, CatchAreaDescription, FisherTypeDescription, GearCode, gear) |> writexl::write_xlsx("temp_fishtix.xlsx")
+  group_by(year = BatchYear, CatchAreaCode, CatchAreaDescription, FisherTypeDescription, gear, ts) |> 
+  summarise(rc = sum(rc), .groups = "drop") 
+
+mutate(
+  FisheryID = case_when(
+    ~ 34, #A1-Ast Trl	WA Area 1 & Astoria Troll
+    ~ 35, #Area2Trl NT	WA Area 2 Non-Treaty Troll
+    ~ 36, #Area2TrlTR	WA Area 2 Treaty Troll
+    ~ 38, #WA Area 3 Non-Treaty troll
+    ~ 39, #WA Area 3 Treaty troll
+    ~ 42,	#A4/4BTrlNT	WA Area 4/4B Non-Treaty Troll
+    ~ 43,	#A4/4BTrlTR	WA Area 4/4B Treaty Troll
+    ~ 44, #A5-6C Trl	WA Area 5-6-6C Troll; all Treaty troll
+    ~ 47, #WlpaBT Net	Willapa Bay & FW Trib Net; all 22-14, Non-treaty Drift Gillnet
+    
+    CatchAreaCode & FisherTypeDescription  ~ 50, #GryHbr Net	Grays Harbor Estuary Net; all NT drift gillnet
+    
+    CatchAreaCode & FisherTypeDescription  ~ 52, #LwCheh Net	Lower Chehalis R Net
+    CatchAreaCode & FisherTypeDescription  ~ 55, #Hump R Net	Humptulips R Net
+    CatchAreaCode & FisherTypeDescription  ~ 56, #UpCheh Net	Upper Chehalis R Net
+    CatchAreaCode & FisherTypeDescription  ~ 63, #Quin R Net	Quinault R Net
+    CatchAreaCode & FisherTypeDescription  ~ 68, #Queets Net	Queets R Net
+    CatchAreaCode & FisherTypeDescription  ~ 71, #Quilly Net	Quillayute R Net; should this get the 770 Sol Duc R recs?
+    CatchAreaCode & FisherTypeDescription  ~ 74, #Hoh R  Net	Hoh R Net
+    CatchAreaCode & FisherTypeDescription  ~ 77, #Mak FW Net	Makah Freshwater Net
+    CatchAreaCode & FisherTypeDescription ~ 79,	#A 4-4A Net	WA Area 4-4A Net
+    CatchAreaCode & FisherTypeDescription  ~ 80, #A4B6CNetNT	WA Area 4B-5-6C Non-Treaty Net; not assigned 23-16 Set Gillnet, 23-52 Mixed Net
+    CatchAreaCode & FisherTypeDescription  ~ 81, #A4B6CNetTR	WA Area 4B-5-6C Treaty Net; assigned 23-16 Set Gillnet, 23-52 Mixed Net
+    CatchAreaCode & FisherTypeDescription  ~ 82, #Ar6D NetNT	6D Non-Treaty Net (Dungeness Bay & R); no FW net recs with "DUNGENESS" in name
+    CatchAreaCode & FisherTypeDescription  ~ 83, #Ar6D NetTR	6D Treaty Net (Dungeness Bay & R); no FW net recs with "DUNGENESS" in name
+    
+    CatchAreaCode & FisherTypeDescription  ~ 84, #Elwha  Net	Elwha R Net
+    CatchAreaCode & FisherTypeDescription ~ 85,	#WJDF T Net	West JDF Straits Trib Net
+    CatchAreaCode & FisherTypeDescription ~ 86,	#EJDF T Net	East JDF Straits Trib Net
+    CatchAreaCode & FisherTypeDescription  ~ 87, #A6-7ANetNT	WA Area 7-7A Non-Treaty Net
+    CatchAreaCode & FisherTypeDescription  ~ 88, #A6-7ANetTR	WA Area 7-7A Treaty Net
+    
+    CatchAreaCode & FisherTypeDescription ~ # 96	A7BCDNetNT	WA Area 7B-7C-7D Non-Treaty Net
+      CatchAreaCode & FisherTypeDescription ~ # 97	A7BCDNetTR	WA Area 7B-7C-7D Treaty Net
+      CatchAreaCode & FisherTypeDescription ~ # 98	Nook R Net	Nooksack R Net
+      CatchAreaCode & FisherTypeDescription ~ # 101	Ar 8 NetNT	WA Area 8 Non-Treaty Net (Skagit)
+      CatchAreaCode & FisherTypeDescription ~ # 102	Ar 8 NetTR	WA Area 8 Treaty Net (Skagit)
+      CatchAreaCode & FisherTypeDescription ~ # 103	Skag R Net	Skagit R Net
+      CatchAreaCode & FisherTypeDescription ~ # 104	SkgR TsNet	Skagit River Test Net
+      CatchAreaCode & FisherTypeDescription ~ # 105	SwinCh Net	Swinomish Channel Net
+      CatchAreaCode & FisherTypeDescription ~ # 109	Ar8A NetNT	WA Area 8A Non-Treaty Net
+      CatchAreaCode & FisherTypeDescription ~ # 110	Ar8A NetTR	WA Area 8A Treaty Net
+      CatchAreaCode & FisherTypeDescription ~ # 111	Ar8D NetNT	WA Area 8D Non-Treaty Net (Tulalip Bay)
+      CatchAreaCode & FisherTypeDescription ~ # 112	Ar8D NetTR	WA Area 8D Treaty Net (Tulalip Bay)
+      CatchAreaCode & FisherTypeDescription ~ # 113	Stil R Net	Stillaguamish R Net
+      CatchAreaCode & FisherTypeDescription ~ # 114	Snoh R Net	Snohomish R Net
+      CatchAreaCode & FisherTypeDescription ~ # 119	Ar10 NetNT	WA Area 10 Non-Treaty Net (Seattle)
+      CatchAreaCode & FisherTypeDescription ~ # 120	Ar10 NetTR	WA Area 10 Treaty Net (Seattle)
+      CatchAreaCode & FisherTypeDescription ~ # 121	Ar10ANetNT	WA Area 10A Non-Treaty Net (Elliott Bay)
+      CatchAreaCode & FisherTypeDescription ~ # 122	Ar10ANetTR	WA Area 10A Treaty Net (Elliott Bay)
+      CatchAreaCode & FisherTypeDescription ~ # 123	Ar10ENetNT	WA Area 10E Non-Treaty Net (East Kitsap)
+      CatchAreaCode & FisherTypeDescription ~ # 124	Ar10ENetTR	WA Area 10E Treaty Net (East Kitsap)
+      CatchAreaCode & FisherTypeDescription ~ # 125	10F-G  Net	WA Area 10F-G Treaty Net (Lake Union)
+      CatchAreaCode & FisherTypeDescription ~ # 126	Duwm R Net	Green/Duwamish R Net
+      CatchAreaCode & FisherTypeDescription ~ # 130	Ar11 NetNT	WA Area 11 Non-Treaty Net (E/W Pass)
+      CatchAreaCode & FisherTypeDescription ~ # 131	Ar11 NetTR	WA Area 11 Treaty Net (E/W Pass)
+      CatchAreaCode & FisherTypeDescription ~ # 132	Ar11ANetNT	WA Area 11A Non-Treaty Net (Comm. Bay)
+      CatchAreaCode & FisherTypeDescription ~ # 133	Ar11ANetTR	WA Area 11A Treaty Net (Comm. Bay)
+      CatchAreaCode & FisherTypeDescription ~ # 134	Puyl R Net	Puyallup R Net
+      CatchAreaCode & FisherTypeDescription ~ # 137	Ar13 NetNT	Area 13 Non-Treaty Net (So Puget Sound)
+      CatchAreaCode & FisherTypeDescription ~ # 138	Ar13 NetTR	Area 13 Treaty Net (So Puget Sound)
+      CatchAreaCode & FisherTypeDescription ~ # 139	Ar13CNetNT	Area 13C Non-Treaty Net (Chambers Bay)
+      CatchAreaCode & FisherTypeDescription ~ # 140	Ar13CNetTR	Area 13C Treaty Net (Chambers Bay)
+      CatchAreaCode & FisherTypeDescription ~ # 141	Ar13ANetNT	Area 13A Non-Treaty Net (Carr Inlet)
+      CatchAreaCode & FisherTypeDescription ~ # 142	Ar13ANetTR	Area 13A Treaty Net (Carr Inlet)
+      CatchAreaCode & FisherTypeDescription ~ # 143	Ar13DNetNT	Area 13D Non-Treaty Net
+      CatchAreaCode & FisherTypeDescription ~ # 144	Ar13DNetTR	Area 13D Treaty Net
+      CatchAreaCode & FisherTypeDescription ~ # 145	A13FKNetNT	Area 13F-13K Non-Treaty Net
+      CatchAreaCode & FisherTypeDescription ~ # 146	A13FKNetTR	Area 13F-13K Treaty Net
+      CatchAreaCode & FisherTypeDescription ~ # 147	Nisq R Net	Nisqually R Net
+      CatchAreaCode & FisherTypeDescription ~ # 148	McAlls Net	McAllister Creek Net
+      CatchAreaCode & FisherTypeDescription ~ # 153	1212BNetNT	Area 12-12B Hood Canal Non-Treaty Net
+      CatchAreaCode & FisherTypeDescription ~ # 154	1212BNetTR	Area 12-12B Hood Canal Treaty Net
+      CatchAreaCode & FisherTypeDescription ~ # 155	A9-9ANetNT	Area 9/9A Non-Treaty Net
+      CatchAreaCode & FisherTypeDescription ~ # 156	A9-9ANetTR	Area 9/9A Treaty Net (On Res)
+      CatchAreaCode & FisherTypeDescription ~ # 157	Ar12ANetNT	Area 12A Non-Treaty Net (Quilcene Bay)
+      CatchAreaCode & FisherTypeDescription ~ # 158	Ar12ANetTR	Area 12A Treaty Net (Quilcene Bay)
+      CatchAreaCode & FisherTypeDescription ~ # 159	A12CDNetNT	Area 12C-12D Non-Treaty Net (SE Hood Canal)
+      CatchAreaCode & FisherTypeDescription ~ # 160	A12CDNetTR	Area 12C-12D Treaty Net (SE Hood Canal)
+      CatchAreaCode & FisherTypeDescription ~ # 161	Skok R Net	Skokomish R Net
+      CatchAreaCode & FisherTypeDescription ~ # 162	Quilcn Net	Quilcene R Net
+      
+  )
+)
 ```
 
 
