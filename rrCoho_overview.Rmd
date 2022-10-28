@@ -49,7 +49,8 @@ data_in <- list()
 mb20 <- list()
 mb20$escp <- read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Escapement_Inputs/MU_Escapement_013122.csv")
 mb20$crc <- read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Landings_Sport/RRTerm_CA_Catch_FinalInputSpt_RegularTS_012722.csv")
-  #read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Landings_Commercial/")
+#do not appear to actually have original raw TOCAS data: mbellman_PostSeasCatchInputFina_12_16_2021.csv
+mb20$tocas <- read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Landings_Commercial/RRTerm_CA_Catch_CommFinalwNames_RegularTS_121621.csv")
 
 
 ```
@@ -220,7 +221,7 @@ Based on `catchstatmonth` ignoring start/end dates outside single month
 
 Persisted CRC~FRAM LU as assigned. Migrated assignment to `framr::lu_coho_crc_fram`
 
-```{r crc_assign_fram_id}
+```{r assign_crc_fram_id}
 data_in$crc <- dplyr::left_join(
   data_in$crc,
   dplyr::select(lu$crc_fram, -FisheryID_alt),
@@ -283,7 +284,7 @@ data_in$crc |>
 
 ## Commercial: TOCAS
 
-**Notes from CohoFRAM_PostSeason_RR_CommCatchInputs_MB111221**
+**Notes from CohoFRAM_PostSeason_RR_CommCatchInputs_MB121621**
 
 >#######################################################################################
 #TO QUERY RAW DATA (http://access.nwifc.org/webapps/index.asp)
@@ -306,6 +307,72 @@ data_in$crc |>
 # 
 # Begin Date = 01/01/1986,  End Date = 12/31/2020  (modify as needed)
 #Save the raw data in a .csv file on your computer.
+
+Unfortunately, do not appear to actually have original raw TOCAS data: "mbellman_PostSeasCatchInputFina_12_16_2021.csv"
+
+EDA on test version of this pretty open ended query run by Ty + Maria
+
+```{r read_tocas}
+data_in$tocas <- read_csv("O:/code/coho/rrterm/tocas_coho_2000-present.csv") |> 
+  filter(Disposition %in% c("C&SF", "COMM", "ORGN", "TEST","TKHM")) |> 
+  mutate(
+    landing_date = as.Date(Landing_Date, format = "%m/%d/%Y"),
+    month = lubridate::month(landing_date),
+    year = lubridate::year(landing_date),
+    ts = case_when(
+      month %in% 1:6 ~ 1,
+      month == 7 ~ 2,
+      month == 8 ~ 3,
+      month == 9 ~ 4,
+      month %in% 10:12 ~ 5)
+  )
+
+#data_in$tocas |> filter(is.na(landing_date) | is.na(month) | is.na(year))
+#any(nchar(data_in$tocas$Catch_Area) < 2)
+data_in$tocas |> count(Disposition)
+```
+
+Reasonable agreement where fisheries/CAs are not dropped...need to work on LU for dropped fisheries/CAs
+
+```{r compare_tocas}
+data_in$tocas |> 
+  group_by(year, ts, Fishery, TribeName, Gear, Disposition, Catch_Area) |> 
+  summarise(catch = sum(Units), .groups = "drop") |> 
+#short term fix? coerce to NA everything not currently in unique(lu_coho_tocas_fram$Disposition)  
+#better to explicitly comma-separate allowed dispositions in lu_coho/lu_coho_tocas_fram
+#then separate_rows from allowed set: 'COMM','C&SF', etc.
+#and that then fixes the bandaid "!TEST"
+#However, TribeName may need this soln? unique(lu_coho_tocas_fram$TribeName)
+  mutate(
+    Disposition = if_else(Disposition %in% c("TEST", "Test", "C&SF"), Disposition, NA_character_),
+    TribeName = if_else(TribeName %in% c("QUINAULT - 18", "CHEHALIS - 02"), TribeName, NA_character_)
+  ) |> 
+  left_join(
+    lu$tocas_fram |> separate_rows(Gear) |> mutate(Gear = as.integer(Gear)),
+    by = c("Fishery", "TribeName", "Gear", "Disposition", "Catch_Area")
+  ) |> 
+  drop_na(FisheryID) |> 
+  inner_join(lu$fram_ca, by = "FisheryID") |> 
+  drop_na(RRTermType) |> 
+  filter(ts > 2) |> 
+  group_by(year, FisheryID, CA_Number, CA_Short_Name, CWT_Flag, Cat_Flag, Type_Calc, RRTermType, ts) |> 
+  summarise(catch = sum(catch), .groups = "drop") |> 
+  arrange(year, CA_Number, ts) |> 
+  pivot_wider(names_from = ts, values_from = catch, values_fill = 0) |> 
+  mutate(
+    catch = case_when(
+      RRTermType == "FW" ~ `3` + `4` + `5`,
+      RRTermType == "M" ~ `4` + `5`
+    )
+  ) |> 
+  filter(year == 2020) |> 
+  full_join(
+    mb20$tocas |> filter(Run_ID == 2020) |> select(year = Run_ID, CA_Number, CA_Short_Name, Catch),
+    by = c("year", "CA_Number")
+  ) |> print(n=40)
+
+
+```
 
 
 ## Commercial: FishTicket
