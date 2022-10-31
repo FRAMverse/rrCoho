@@ -28,8 +28,11 @@ lu <- list(
   tocas_fram = as_tibble(framr::lu_coho_tocas_fram),
   
   fram_ca = readr::read_csv("lu_FRAM_CA.csv"),
-  ca_pr_mu = readr::read_csv("lu_rrterm_CA_PR_MU.csv")
+  ca_pr_mu = readr::read_csv("lu_CA_PR_MU.csv")
 )
+
+#lu$tocas_fram <- readxl::read_excel("O:/code/framr/xlsx/lu_coho.xlsx", sheet = "TOCAS_FRAM")
+#lu$fram_ca <- readr::read_csv("lu_FRAM_CA.csv")
 
 data_in <- list()
 
@@ -49,7 +52,6 @@ data_in <- list()
 mb20 <- list()
 mb20$escp <- read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Escapement_Inputs/MU_Escapement_013122.csv")
 mb20$crc <- read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Landings_Sport/RRTerm_CA_Catch_FinalInputSpt_RegularTS_012722.csv")
-#do not appear to actually have original raw TOCAS data: mbellman_PostSeasCatchInputFina_12_16_2021.csv
 mb20$tocas <- read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Landings_Commercial/RRTerm_CA_Catch_CommFinalwNames_RegularTS_121621.csv")
 
 
@@ -73,7 +75,9 @@ https://fisheriesservices.nwifc.org/fram-model-runs/preseason-fram-model-prepara
 # Established lookups
 
 ```{r read_rrterm_mdb, eval=FALSE}
-db <- "O:/code/coho/rrterm/CohoRR_4_CoManagerReview_020221/RRT_CO_2019-10_2021-02-02.mdb"
+#db <- "O:/code/coho/rrterm/CohoRR_4_CoManagerReview_020221/RRT_CO_2019-10_2021-02-02.mdb"
+db <- "O:/code/coho/rrterm/CohoRR_4_CoMngrReview_wHC_013122/RRT_CO_2020-10_2022_01_31rv.mdb"
+
 db_con <- DBI::dbConnect(drv = odbc::odbc(), .connection_string = paste0("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=", db, ";"))
 
 rr <- list(
@@ -101,9 +105,42 @@ DBI::dbDisconnect(db_con)
 ```{r write_lu_csvs, eval=FALSE}
 rr$lu_mu
 
+# #looking at missing TR portion of paired FisheryIDs
+# rr$lu_ca |> filter(CA_Number == 531)
+# rr$lu_ca |> filter(CA_Number == 561)
+# rr$lu_ca |> filter(CA_Number == 581)
+# rr$lu_ca |> filter(CA_Number == 583)
+# rr$lu_ca |> filter(CA_Number == 611)
+# rr$lu_ca |> filter(CA_Number == 614)
+# rr$lu_ca |> filter(CA_Number == 615)
+# rr$lu_ca |> filter(CA_Number == 651)
+# rr$lu_ca |> filter(CA_Number == 656); lu$tocas_fram |> filter(between(FisheryID, 141, 142))
+# rr$lu_ca |> filter(CA_Number == 657); lu$tocas_fram |> filter(between(FisheryID, 143, 144))
+# rr$lu_ca |> filter(CA_Number == 705); lu$tocas_fram |> filter(between(FisheryID, 153, 154))
+# rr$lu_ca |> filter(CA_Number == 706); lu$tocas_fram |> filter(between(FisheryID, 155, 156))
+# rr$lu_ca |> filter(CA_Number == 709); lu$tocas_fram |> filter(between(FisheryID, 157, 158))
+# rr$lu_ca |> filter(CA_Number == 710); lu$tocas_fram |> filter(between(FisheryID, 159, 160))
+# 
+# 
 # #mapping FRAM FisheryIDs to RRterm CA catch areas
 # #now added MB FW/M RRTermType field to define which FRAM timesteps used in aggregation to annual
 # rr$lu_ca |>
+#   bind_rows(
+#     rr$lu_ca |> filter(CA_Number == 531) |> mutate(FRAM_CA_Number = 97), #Tr 7BCD missing but catches exist
+#     rr$lu_ca |> filter(CA_Number == 561) |> mutate(FRAM_CA_Number = 102), #Tr Skag Net missing but catches exist for FRAM f102
+#     rr$lu_ca |> filter(CA_Number == 581) |> mutate(FRAM_CA_Number = 110), #Tr A8A Net missing but catches exist for FRAM f110
+#     rr$lu_ca |> filter(CA_Number == 583) |> mutate(FRAM_CA_Number = 112), #Tr A8D Net missing but catches exist for FRAM f112
+#     rr$lu_ca |> filter(CA_Number == 611) |> mutate(FRAM_CA_Number = 120), #Tr A10 Net missing but catches exist for FRAM f120
+#     rr$lu_ca |> filter(CA_Number == 614) |> mutate(FRAM_CA_Number = 122), #Tr A10A Net missing but catches exist
+#     rr$lu_ca |> filter(CA_Number == 615) |> mutate(FRAM_CA_Number = 124), #Tr A10E Net missing but catches exist
+#     rr$lu_ca |> filter(CA_Number == 651) |> mutate(FRAM_CA_Number = 138), #Tr A13 Net missing but catches exist
+#     rr$lu_ca |> filter(CA_Number == 656) |> mutate(FRAM_CA_Number = 142), #Tr A13A Net missing but catches exist
+#     rr$lu_ca |> filter(CA_Number == 657) |> mutate(FRAM_CA_Number = 144), #Tr A13D Net missing but catches exist
+#     rr$lu_ca |> filter(CA_Number == 705) |> mutate(FRAM_CA_Number = 154), #Tr 12-12B Net missing but catches exist
+#     rr$lu_ca |> filter(CA_Number == 706) |> mutate(FRAM_CA_Number = 156), #Tr 9-9A Net missing but catches exist
+#     rr$lu_ca |> filter(CA_Number == 709) |> mutate(FRAM_CA_Number = 158), #Tr 9-9A Net missing but catches exist
+#     rr$lu_ca |> filter(CA_Number == 710) |> mutate(FRAM_CA_Number = 160) #Tr 9-9A Net missing but catches exist
+#   ) |>
 #   select(FisheryID = FRAM_CA_Number, CA_Number, CA_Short_Name, CWT_Flag, Cat_Flag, Type_Calc) |>
 #   left_join(
 #     read_csv("O:/code/coho/rrterm/MB_Draft_2020/ReferenceFiles_4Rcode/Fishery_CohoFRAM_wType_101018.csv") |>
@@ -117,7 +154,7 @@ rr$lu_mu
 # #the key crosswalk to assign catches to associated stocks
 # rr$lu_ca_mu |> 
 #   mutate(PR_MU = paste(PR_Number, PR_MU_Number, sep = "_")) |> 
-#   write_csv("lu_rrterm_CA_PR_MU.csv")
+#   write_csv("lu_CA_PR_MU.csv")
 
 ```
 
@@ -205,19 +242,9 @@ DBI::dbDisconnect(db_con)
 
 **Notes from CohoFRAM_PostSeasonwMZ_RR_SportFisheryInputs_111021.R**
 
-> #MB Because use of this data is often to utilize a catch number if it exists, by default data should be non-zero.
-#Thus, I'm going to remove these zero values.  Not in all analysis or uses will it be appropriate to remove these!
+Persisted removal of AreaCode == 192 and/but could/should also be handled via LU on desired CAs? `rr$lu_ca_mu`
 
-This seems unnecessary/ill-advised. Zeros would either be aggregated in sums or meaningful if not data errors.
-
-> #MB Also going to remove data with an Unknown (=192) AreaCode (no existing records with Invalid (=193))
-
-Persisted, and/but could/should also be handled via LU on desired CAs? `rr$lu_ca_mu`
-
-> #Generate coho FRAM time steps from Month
-# 1=Jan-June, 2=July, 3=Aug, 4=Sept, 5=Oct-Dec
-
-Based on `catchstatmonth` ignoring start/end dates outside single month
+Persisted Timestep based on `catchstatmonth` ignoring start/end dates outside single month
 
 Persisted CRC~FRAM LU as assigned. Migrated assignment to `framr::lu_coho_crc_fram`
 
@@ -235,7 +262,7 @@ data_in$crc <- dplyr::left_join(
 
 Assign RRTerm CA from FRAM FisheryID
 
-Seems catches only summed from FRAM timestep 3+4+5 FW or 4+5 Marine (Aug+Sep+Oct-Nov).
+Catches only summed from FRAM timestep 3+4+5 FW or 4+5 Marine (Aug+Sep+Oct-Nov).
 
 Seems undesirable to DA, but persisting per AHB. Apparently "dip-in" concerns.
 
@@ -329,7 +356,7 @@ data_in$tocas <- read_csv("O:/code/coho/rrterm/tocas_coho_2000-present.csv") |>
 
 #data_in$tocas |> filter(is.na(landing_date) | is.na(month) | is.na(year))
 #any(nchar(data_in$tocas$Catch_Area) < 2)
-data_in$tocas |> count(Disposition)
+#data_in$tocas |> count(Disposition)
 ```
 
 Reasonable agreement where fisheries/CAs are not dropped...need to work on LU for dropped fisheries/CAs
@@ -344,11 +371,11 @@ data_in$tocas |>
 #and that then fixes the bandaid "!TEST"
 #However, TribeName may need this soln? unique(lu_coho_tocas_fram$TribeName)
   mutate(
-    Disposition = if_else(Disposition %in% c("TEST", "Test", "C&SF"), Disposition, NA_character_),
+    #Disposition = if_else(Disposition %in% c("TEST", "Test", "C&SF"), Disposition, NA_character_),
     TribeName = if_else(TribeName %in% c("QUINAULT - 18", "CHEHALIS - 02"), TribeName, NA_character_)
   ) |> 
   left_join(
-    lu$tocas_fram |> separate_rows(Gear) |> mutate(Gear = as.integer(Gear)),
+    lu$tocas_fram |> separate_rows(Disposition) |> separate_rows(Gear) |> mutate(Gear = as.integer(Gear)),
     by = c("Fishery", "TribeName", "Gear", "Disposition", "Catch_Area")
   ) |> 
   drop_na(FisheryID) |> 
@@ -369,8 +396,16 @@ data_in$tocas |>
   full_join(
     mb20$tocas |> filter(Run_ID == 2020) |> select(year = Run_ID, CA_Number, CA_Short_Name, Catch),
     by = c("year", "CA_Number")
-  ) |> print(n=40)
+  ) |> 
+  mutate(d = catch - Catch) |> print(n=40)
 
+
+
+lu$tocas_fram |> filter(FisheryID %in% c(155, 156))
+data_in$tocas |> 
+  group_by(year, ts, Fishery, TribeName, Gear, Disposition, Catch_Area) |> 
+  summarise(catch = sum(Units), .groups = "drop") |> 
+  filter(year == 2020, str_detect(Catch_Area, "09"))
 
 ```
 
