@@ -619,21 +619,28 @@ Create rec_month from date; loses a trace number of recent records to malformed 
 MB escapement separating out C&S, so `fishery %in% c(50:54,57:59)`, excluding RMIS 55 & 56
 
 
-```{r rmis_rr_fisheries}
+```{r rmis_rr_to_fram}
 # #MB wrangled rec-rel, silly big file
 # mb20$cwt_prefram <- readr::read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Fishery_Method_Files_CWT/rec10_4merge_121621.csv")
 
 #only a few years, mostly 2019-2020, as raw files
-#still silly big number of columns, here not bothering to avoid .x/.y duplicates
+#still silly big number of columns
 mb20$cwt_raw <- left_join(
   readr::read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Raw_RMIS_CWTQueryData/Recovery_Data_121621/CSV6559.csv")
   ,
-  readr::read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Raw_RMIS_CWTQueryData/Release_Data_121621/CSV6205.csv")
+  readr::read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Raw_RMIS_CWTQueryData/Release_Data_121621/CSV6205.csv") |> 
+    select(
+      tag_code = tag_code_or_release_id,
+      brood_year, rearing_type,
+      release_location_code, release_location_name, 
+      cwt_1st_mark, cwt_1st_mark_count, 
+      cwt_2nd_mark, cwt_2nd_mark_count, 
+      non_cwt_1st_mark, non_cwt_1st_mark_count, 
+      non_cwt_2nd_mark, non_cwt_2nd_mark_count)
+  #or: "O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Raw_RMIS_CWTQueryData/AllRelease_Data_123021/CSV1601.csv"
   ,
-  by = c("tag_code" = "tag_code_or_release_id",
-         "brood_year" = "brood_year")
-  ) |> 
-  select(-ends_with(".y"))
+  by = c("tag_code", "brood_year")
+  ) #|> names()
 
 
 #could filter on cwt_1st_mark and rearing_type immediately?
@@ -658,15 +665,21 @@ rmis_rr <- mb20$cwt_raw |>
   #count(run_year, rec_year) #vast majority of recovery_date years match run_year
   select(
     starts_with("rec_"), 
-    ts,
+    ts, 
     recovery_location_code, 
-    fishery, fishery_single, gear, 
-    estimated_number, cwt_1st_mark,
-    brood_year, 
+    fishery, fishery_single, gear,
+    estimated_number, 
+    tag_code,
+    brood_year, last_release_date_year,
+    hatchery_location_name,
+    stock_location_name,
+    
     rearing_type,
     release_location_code, release_location_name, 
-    hatchery_location_name = hatchery_location_name.x,
-    stock_location_name = stock_location_name.x
+    cwt_1st_mark, cwt_1st_mark_count, 
+    cwt_2nd_mark, cwt_2nd_mark_count, 
+    non_cwt_1st_mark, non_cwt_1st_mark_count, 
+    non_cwt_2nd_mark, non_cwt_2nd_mark_count
     ) |> 
   tibble::rowid_to_column("uid") 
 
@@ -731,15 +744,10 @@ rmis_rr <- left_join(
 
 ```{r rmis_rr_preliminary_testing}
 #unmapped recoveries
-rmis_rr |> 
-  filter(is.na(FisheryID)) |> 
-  count(recovery_location_code) |> 
-  print(n=100)
+rmis_rr |> filter(is.na(FisheryID)) |> count(recovery_location_code) |> print(n=100)
+
 #bad dates Indy (look all RMIS 2Canadian and 7other for 2018-2020 test set)
-rmis_rr |> 
-  filter(is.na(rec_date)) |> 
-  count(recovery_location_code) |> 
-  print(n=100)
+rmis_rr |> filter(is.na(rec_date)) |> count(recovery_location_code) |> print(n=100)
 
 #removing unclipped and W tags...
 rmis_rr |> 
@@ -759,31 +767,6 @@ rmis_rr |>
 #   filter(Fram_CA_Number != OldRR_FRAMCANumber) |> print(n=30)
 # lu$fram_ca |> filter(FisheryID %in% 153:160) |> arrange(FisheryID)
 
-
-#demostrating non-stock aggregation to RRTerm CA
-#basically aiming for close to this but by MU_shortname/StockID
-rmis_rr |> 
-  drop_na(FisheryID, rec_date, estimated_number) |> 
-  filter(
-    between(as.integer(cwt_1st_mark), 5000, 6000),
-    rearing_type %in% c("H","M")
-    ) |> 
-  inner_join(lu$fram_ca, by = "FisheryID") |> 
-  drop_na(RRTermType) |> 
-  filter(ts > 2) |> 
-  #group_by(year = rec_year, FisheryID, CA_Number, CA_Short_Name, CWT_Flag, Cat_Flag, Type_Calc, RRTermType, ts) |> 
-  group_by(year = rec_year, CA_Number, CA_Short_Name, CWT_Flag, Cat_Flag, Type_Calc, RRTermType, ts) |> 
-  summarise(estimated_number = sum(estimated_number), .groups = "drop") |> 
-  arrange(year, CA_Number, ts) |> 
-  pivot_wider(names_from = ts, values_from = estimated_number, values_fill = 0) |> 
-  mutate(
-    estimated_number = case_when(
-      RRTermType == "FW" ~ `3` + `4` + `5`,
-      RRTermType == "M" ~ `4` + `5`
-    )
-  ) |> 
-  filter(year == 2020)
-
 ```
 
 ## FRAM StockID assignment
@@ -795,7 +778,7 @@ Post-processed CWT recovery dataset output from: CohoRR_CWT_PostProcess_FisheryM
  rec_age >2, 
  rel_age=2 and if rel_age >2 and avg_weight <200 and study_integrity != W).
 
-```{r}
+```{r rmis_rr_to_fram_pr_mu}
 ##massive file, not worth reading in unless essential
 #read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Fishery_Method_Files_CWT/END_MSMFisheryMapping_Match3_010322.csv")
 
@@ -804,8 +787,8 @@ Post-processed CWT recovery dataset output from: CohoRR_CWT_PostProcess_FisheryM
 # #derived from 
 # "O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Stock_Method_Files_CWT/Reg1-6AllFisheryCWTRecov_FRAMFisheryStock_010422.csv"
 
-#reached overall OK agreement, some mismatches look related TS-included in summation
-rmis_rr |> 
+#add StockID and PR_MU
+rmis_rr <- rmis_rr |> 
   drop_na(FisheryID, rec_date, estimated_number) |> 
   filter(
     between(as.integer(cwt_1st_mark), 5000, 6000),
@@ -815,11 +798,16 @@ rmis_rr |>
     lu$rmis_fram_pr_mu,
     by = "release_location_name"
   ) |> 
-  #count(StockID, PR_MU, MU_Short_Name) |> print(n=50)
+  # count(StockID, PR_MU, MU_Short_Name) |> print(n=50)
   # #do not see glaringly missing release_loc from PS, a few from WA coast and ColR
   # filter(is.na(StockID)) |> count(release_location_name, release_location_code) |> arrange(desc(n)) |> print(n=60)
+  drop_na(StockID, PR_MU)
+
+
+#reached overall OK agreement, some mismatches look related TS-included in summation
+rmis_rr |> 
   inner_join(lu$fram_ca, by = "FisheryID") |> 
-  drop_na(PR_MU, RRTermType) |> 
+  drop_na(RRTermType) |> 
   filter(ts > 2) |> 
   group_by(
     year = rec_year, ts,
@@ -832,7 +820,13 @@ rmis_rr |>
     estimated_number = case_when(
       RRTermType == "FW" ~ `3` + `4` + `5`,
       RRTermType == "M" ~ `4` + `5`
-    )
+    ),
+    #MB has HC fisheries as all 3+4+5
+    estimated_number = if_else(
+      between(CA_Number, 700, 756),
+      `3` + `4` + `5`,
+      estimated_number
+      )
     ,`345` = `3` + `4` + `5`
   ) |> 
   filter(year == 2020) |> 
@@ -847,6 +841,62 @@ rmis_rr |>
 
 ```
 
+## PEF calcs
+
+Basically appears to divide the total releases by the tagged, of marked?
+
+(cwt_1st/2nd_mark_count + non_cwt_1st/2nd_mark_count) / cwt_1st/2nd_mark_count
+
+MB calc for all releases ever, need to maintain that or okay to operate only on recovered mapped tags?
+
+Bigger question - appears to calc summaries on StockID/PR_MU rather than tag_code level...
+
+```{r pef}
+# #MB filters on rel_age==2 (constructing 'Match4' obj)
+# Match2$rel_age = Match2$last_release_date_year - Match2$brood_year
+# #but then groups on Run_ID (corresponding to recovery/fishing year?)
+# Match4$Run_ID = (Match4$brood_year + 3)
+
+#already filtered to only marked cwt_1st (5000:6000)
+rmis_rr |> 
+  distinct(tag_code, .keep_all = T) |> 
+  filter(last_release_date_year - brood_year == 2) |> #no effect in this test dataset
+  mutate(
+    Run_ID = brood_year + 3,
+    across(ends_with("_count"), ~replace_na(.,0))
+    ) |> 
+  #count(cwt_1st_mark, cwt_2nd_mark)
+  filter(Run_ID==2020, PR_MU=="1_4")
+  group_by(
+    Run_ID, StockID, PR_MU, tag_code
+    ) |> 
+  #mutate( 
+  summarise(
+    rel_tot = cwt_1st_mark_count + cwt_2nd_mark_count + non_cwt_1st_mark_count + non_cwt_2nd_mark_count,
+    rel_m_cwt_1st = if_else(between(as.integer(cwt_1st_mark), 5000, 6000), cwt_1st_mark_count, 0),
+    rel_m_cwt_2nd = if_else(between(as.integer(cwt_2nd_mark), 5000, 6000), cwt_2nd_mark_count, 0)
+  ) |> 
+  filter(Run_ID==2020)
+
+#need to sort with AHB exactly what the desired/intented calculation should be
+#appears that, for example, the 559 UM-but-tagged Skookum count (cwt_2nd_mark==0000) is being included in the "marked only" denominator
+
+
+
+
+#Access table format, all years...
+read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/PEF_Method_Files/MU_Local_PEF_010422.csv") |> 
+  filter(Run_ID == 2020)
+#object export with "_Num" and "_Den" fields
+read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/PEF_Method_Files/LocalPEF_Match5sum_010422.csv") |> 
+    filter(Run_ID == 2020)
+
+
+
+"O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Raw_RMIS_CWTQueryData/AllRelease_Data_123021/CSV1601.csv"
+
+
+```
 
 # Run reconstruction 
 
