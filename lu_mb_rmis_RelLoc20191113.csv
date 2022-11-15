@@ -1,0 +1,249 @@
+release_location_name,PR_Number,PR_MU_Number,StockID,FRAM_StockLongName,PR_MU,MU_Short_Name
+KENDALL CR   01.0406,1,2,4,Kendall Creek Hatchery Marked,1_2,kendlh
+NOOKSACK -SF 01.0246,1,3,6,Skookum Creek Hatchery Marked,1_3,skokmh
+SKOOKUM CR   01.0273,1,3,6,Skookum Creek Hatchery Marked,1_3,skokmh
+TELEGRAPH SLOUGH 03.0117,1,3,6,Skookum Creek Hatchery Marked,1_3,skokmh
+LUMMI HATCHERY -POND,1,4,8,Lummi Ponds Hatchery Marked,1_4,lumpdh
+LUMMI SEA PONDS,1,4,8,Lummi Ponds Hatchery Marked,1_4,lumpdh
+NOOKSACK R+LUMMI BAY,1,4,8,Lummi Ponds Hatchery Marked,1_4,lumpdh
+BOB SMITH CR 03.0015,1,5,10,Bellingham Bay Net Pens Marked,1_5,bhambh
+FAIRHAVEN NET PENS,1,5,10,Bellingham Bay Net Pens Marked,1_5,bhambh
+INDIAN SLOUGH 3.0102,1,5,10,Bellingham Bay Net Pens Marked,1_5,bhambh
+PADILLA BAY,1,5,10,Bellingham Bay Net Pens Marked,1_5,bhambh
+SQUALICUM NET PENS,1,5,10,Bellingham Bay Net Pens Marked,1_5,bhambh
+CASCADE R    03.1411,2,2,20,Skagit River Hatchery Marked,2_2,skagth
+CLARK CR     03.1421,2,2,20,Skagit River Hatchery Marked,2_2,skagth
+BAKER LK      (03),2,4,22,Baker (Skagit) Hatchery Marked,2_4,skgbkh
+BAKER R      03.0435,2,4,22,Baker (Skagit) Hatchery Marked,2_4,skgbkh
+SWINOMISH CHANNEL PD,2,5,26,Swinomish Channel Hatchery Marked,2_5,swinch
+FIDALGO BAY NET PENS,2,6,28,Oak Harbor Net Pens Marked,2_6,oakhbh
+SKAGIT BAY  (AREA 8),2,6,28,Oak Harbor Net Pens Marked,2_6,oakhbh
+WHIDBEY ISL NET PENS,2,6,28,Oak Harbor Net Pens Marked,2_6,oakhbh
+SULPHUR SPRINGS HATC,2,4,22,Baker (Skagit) Hatchery Marked,2_4,skgbkh
+JIM CR       05.0322,3,2,32,Stillaguamish River Hatchery Marked,3_2,stillh
+JIM CR + BIG FOUR CR,3,2,32,Stillaguamish River Hatchery Marked,3_2,stillh
+JIM CR AND BEAVER CR,3,2,32,Stillaguamish River Hatchery Marked,3_2,stillh
+JOHNSON CR  05.0170A,3,2,32,Stillaguamish River Hatchery Marked,3_2,stillh
+STILLAGUAMISH R -NF,3,2,32,Stillaguamish River Hatchery Marked,3_2,stillh
+TROUT FARM C 5.0358A,3,2,32,Stillaguamish River Hatchery Marked,3_2,stillh
+TULALIP CR   07.0001,3,3,34,Tulalip Hatchery Marked,3_3,tuliph
+MAY CR       07.0943,3,5,38,Snohomish River Hatchery Marked,3_5,snohoh
+SNOQUALMIE R 07.0219,3,5,38,Snohomish River Hatchery Marked,3_5,snohoh
+WALLACE R    07.0940,3,5,38,Snohomish River Hatchery Marked,3_5,snohoh
+WALLACE R-NF 07.0951,3,5,38,Snohomish River Hatchery Marked,3_5,snohoh
+WINTERS CR   07.0882,3,5,38,Snohomish River Hatchery Marked,3_5,snohoh
+POSSESSION BAIT PD,3,6,40,Area 8A Net Pens Marked,3_6,ar8anh
+PORT GAMBLE BAY PENS,4,1,42,Port Gamble Net Pens Marked,4_1,ptgamh
+BIG QUILCENE 17.0012,4,4,48,Quilcene Hatchery Marked,4_4,qlcnbh
+QUILCENE +DABOB BAYS,4,5,50,Quilcene Bay Net Pens Marked,4_5,qlcenh
+QUILCENE BAY SEAPENS,4,5,50,Quilcene Bay Net Pens Marked,4_5,qlcenh
+FINCH CR     16.0222,4,7,54,Hoodsport Hatchery Marked,4_7,hoodsh
+PURDY CR     16.0005,4,9,58,George Adams Hatchery Marked,4_9,gadamh
+SKOKOMISH R  16.0001,4,9,58,George Adams Hatchery Marked,4_9,gadamh
+PEALE + SKOOKUMCHUCK,5,3,66,South Puget Sound Net Pens Marked,5_3,ssdnph
+PEALE PASS @ SI PENS,5,3,66,South Puget Sound Net Pens Marked,5_3,ssdnph
+PEALE PASS @ SS PENS,5,3,66,South Puget Sound Net Pens Marked,5_3,ssdnph
+PEALE PASS +JOHNS CR,5,3,66,South Puget Sound Net Pens Marked,5_3,ssdnph
+CLEAR CR    11.0013C,5,4,68,Nisqually River Hatchery Marked,5_4,nisqlh
+KALAMA CR    11.0017,5,4,68,Nisqually River Hatchery Marked,5_4,nisqlh
+ECHO BAY -FOX ISLAND,5,6,72,Fox Island Net Pens Marked,5_6,foxish
+MINTER CR    15.0048,5,7,74,Minter Creek Hatchery Marked,5_7,mintch
+PONCIN COVE-ZITTLE'S,5,10,80,Area 13 Miscellaneous Hatchery Marked,5_10,ar13mh
+SEQUALITCHEW 12.0019,5,10,80,Area 13 Miscellaneous Hatchery Marked,5_10,ar13mh
+SPURGEON CR  13.0037,5,10,80,Area 13 Miscellaneous Hatchery Marked,5_10,ar13mh
+S PRAIRIE CR 10.0429,5,12,84,Puyallup River Hatchery Marked,5_12,puyalh
+COWSKL & RUSHWTR PDS,5,12,84,Puyallup River Hatchery Marked,5_12,puyalh
+COWSKULL ACCLIM POND,5,12,84,Puyallup River Hatchery Marked,5_12,puyalh
+KAPOWSIN CR  10.0600,5,12,84,Puyallup River Hatchery Marked,5_12,puyalh
+KAPOWSIN LK NET PENS,5,12,84,Puyallup River Hatchery Marked,5_12,puyalh
+LK KAPOWSIN (PIER),5,12,84,Puyallup River Hatchery Marked,5_12,puyalh
+PUYALLUP R   10.0021,5,12,84,Puyallup River Hatchery Marked,5_12,puyalh
+RUSHINGWATER 10.0625,5,12,84,Puyallup River Hatchery Marked,5_12,puyalh
+RUSHINGWATER AC POND,5,12,84,Puyallup River Hatchery Marked,5_12,puyalh
+RUSHINGWTR & WRIA 10.0680,5,12,84,Puyallup River Hatchery Marked,5_12,puyalh
+VOIGHT CR    10.0414,5,12,84,Puyallup River Hatchery Marked,5_12,puyalh
+VOIGHT CR TR 10.0428,5,12,84,Puyallup River Hatchery Marked,5_12,puyalh
+QUARTERMASTER HARBOR,5,14,88,Area 11 Hatchery Marked,5_14,are11h
+AGATE P + ILLAHEE NP,5,16,92,Area 10E Hatchery Marked,5_16,ar10eh
+AGATE PASS SEA PENS,5,16,92,Area 10E Hatchery Marked,5_16,ar10eh
+BROWNSVILLE NET PENS,5,16,92,Area 10E Hatchery Marked,5_16,ar10eh
+MANCHESTER FUEL DEPT,5,16,92,Area 10E Hatchery Marked,5_16,ar10eh
+RICH PASSAGE,5,16,92,Area 10E Hatchery Marked,5_16,ar10eh
+NEWAUKUM CR  09.0114,5,18,96,Green River Hatchery Marked,5_18,greenh
+BIG SOOS CR  09.0072,5,18,96,Green River Hatchery Marked,5_18,greenh
+CRISP CR     09.0113,5,18,96,Green River Hatchery Marked,5_18,greenh
+ELLIOTT BAY SEAPENS,5,18,96,Green River Hatchery Marked,5_18,greenh
+ELLIOTT BAY TRIBAL NP,5,18,96,Green River Hatchery Marked,5_18,greenh
+GREEN R      09.0001,5,18,96,Green River Hatchery Marked,5_18,greenh
+ISSAQUAH CR  08.0178,5,20,100,Lake Washington Hatchery Marked,5_20,lakwah
+PORTAGE BAY/SHIP CNL,5,20,100,Lake Washington Hatchery Marked,5_20,lakwah
+SEWARD PARK  (LK WA),5,20,100,Lake Washington Hatchery Marked,5_20,lakwah
+SHIP CANL @ MONTLAKE,5,20,100,Lake Washington Hatchery Marked,5_20,lakwah
+DUNGENESS R  18.0018,6,2,110,Dungeness Hatchery Marked,6_2,dungeh
+ELWHA R      18.0272,6,4,114,Elwha Hatchery Marked,6_4,elwhah
+LOWER ELWHA HATCH - HOUSE,6,4,114,Elwha Hatchery Marked,6_4,elwhah
+LOWER ELWHA HATCHERY,6,4,114,Elwha Hatchery Marked,6_4,elwhah
+PORT ANGELES NET PEN,6,7,120,Port Angeles Net Pens Marked,6_7,ptangh
+EDUCKET CR   20.0010,7,2,126,Makah Coastal Hatchery Marked,7_2,makahh
+SOOES R      20.0015,7,2,126,Makah Coastal Hatchery Marked,7_2,makahh
+SOLEDUCK R   20.0096,8,4,134,Quillayute River Fall Hatchery Marked,8_4,quilfh
+SOLEDUCK R TRIBS,8,4,134,Quillayute River Fall Hatchery Marked,8_4,quilfh
+BOGACHIEL R  20.0162,8,4,134,Quillayute River Fall Hatchery Marked,8_4,quilfh
+BEAR CR TRIBS (BOGA),8,4,134,Quillayute River Fall Hatchery Marked,8_4,quilfh
+BOGACHIEL R TRIBS,8,4,134,Quillayute River Fall Hatchery Marked,8_4,quilfh
+HEMP HILL CR 20.0249,8,4,134,Quillayute River Fall Hatchery Marked,8_4,quilfh
+DICKEY R TRIBS,8,4,134,Quillayute River Fall Hatchery Marked,8_4,quilfh
+CANYON CR    20.0470,9,2,138,Hoh River Hatchery Marked,9_2,hohrvh
+HOH R        20.0422,9,2,138,Hoh River Hatchery Marked,9_2,hohrvh
+CHALAAT CR   20.0423,9,2,138,Hoh River Hatchery Marked,9_2,hohrvh
+HOH R TRIBS     (20),9,2,138,Hoh River Hatchery Marked,9_2,hohrvh
+MAPLE CR     20.0462,9,2,138,Hoh River Hatchery Marked,9_2,hohrvh
+HOH R + TAFT CR,9,2,138,Hoh River Hatchery Marked,9_2,hohrvh
+BORDER CR    21.0200,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+BULL CR      21.0085,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+CHRISTMAS CR 21.0065,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+CLEARWATER R 21.0024,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+ELKHORN CR   21.0036,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+HUNT CR      21.0032,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+HURST CR     21.0025,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+MANOR CR -NF 21.0088,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+MATHENY CR   21.0165,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+MILLER CR    21.0048,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+MUD CR       21.0163,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+"NANCY CR     21.0113",10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+NORTH CR     21.0202,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+PETERSON CR  21.0068,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+PRAIRIE  CR  21.0071,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+QUEETS R TRIBS,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+SALMON R     21.0139,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+SHALE CR     21.0041,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+SUSIE CR     21.0124,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+UNNAMED CR   21.0042,10,2,142,Queets River Fall Hatchery Marked,10_2,quetfh
+QUINAULT R   21.0398,11,2,148,Quinault River Fall Hatchery Marked,11_2,quinfh
+COOK CR      21.0429,11,2,148,Quinault River Fall Hatchery Marked,11_2,quinfh
+QUINAULT R -BELOW LK,11,2,148,Quinault River Fall Hatchery Marked,11_2,quinfh
+QUINAULT LK   (21),11,2,148,Quinault River Fall Hatchery Marked,11_2,quinfh
+CAMP 7 BEAVER POND,11,2,148,Quinault River Fall Hatchery Marked,11_2,quinfh
+ABERDEEN NET PENS,12,6,160,Grays Harbor Net Pens Marked,12_6,gryhbh
+OCEAN SHORES B BASIN,12,6,160,Grays Harbor Net Pens Marked,12_6,gryhbh
+WESTPORT BOAT BASIN,12,6,160,Grays Harbor Net Pens Marked,12_6,gryhbh
+OCEAN SHORES NET PEN,12,6,160,Grays Harbor Net Pens Marked,12_6,gryhbh
+BINGHAM CR   22.0465,12,2,152,Chehalis River Hatchery Marked,12_2,chehlh
+SATSOP R -EF 22.0360,12,2,152,Chehalis River Hatchery Marked,12_2,chehlh
+STEVENS CR   22.0064,12,4,156,Humptulips River Hatchery Marked,12_4,humpth
+ALLEN CR     23.0668,12,4,156,Humptulips River Hatchery Marked,12_4,humpth
+GRAYS HARBOR TRIBS,12,4,156,Humptulips River Hatchery Marked,12_4,humpth
+FORK CR      24.0356,13,2,164,Willapa Bay Hatchery Marked,13_2,willah
+NORTH NEMAH R24.0460,13,2,164,Willapa Bay Hatchery Marked,13_2,willah
+"NASELLE R    24.0543",13,2,164,Willapa Bay Hatchery Marked,13_2,willah
+GRAYS R -WF  25.0131,14,1,166,Columbia River Early Hatchery Marked,14_1,colreh
+BIG CR (LWR COL R),14,1,166,Columbia River Early Hatchery Marked,14_1,colreh
+CEDAR CR #1 (SANDY R,14,1,166,Columbia River Early Hatchery Marked,14_1,colreh
+TANNER CR (BNVILLE),14,1,166,Columbia River Early Hatchery Marked,14_1,colreh
+COLUMBIA R-1,14,1,166,Columbia River Early Hatchery Marked,14_1,colreh
+COLUMBIA R-2,14,1,166,Columbia River Early Hatchery Marked,14_1,colreh
+WAHKEENA PD (LO COL),14,1,166,Columbia River Early Hatchery Marked,14_1,colreh
+UMATILLA R,14,1,166,Columbia River Early Hatchery Marked,14_1,colreh
+GREEN R      26.0323,14,1,166,Columbia River Early Hatchery Marked,14_1,colreh
+YAKIMA R-LOW 37.0002,14,1,166,Columbia River Early Hatchery Marked,14_1,colreh
+FALLERT CR   27.0017,14,1,166,Columbia River Early Hatchery Marked,14_1,colreh
+L WHITE SALMON@WILRD,14,1,166,Columbia River Early Hatchery Marked,14_1,colreh
+TOUTLE R-NF +GREEN R,14,1,166,Columbia River Early Hatchery Marked,14_1,colreh
+WASHOUGAL R  28.0159,14,1,166,Columbia River Early Hatchery Marked,14_1,colreh
+KLICKITAT R  30.0002,14,1,166,Columbia River Early Hatchery Marked,14_1,colreh
+LEWIS R      27.0168,14,1,166,Columbia River Early Hatchery Marked,14_1,colreh
+ELOCHOMAN R  25.0236,14,1,166,Columbia River Early Hatchery Marked,14_1,colreh
+KLASKANINE R,14,2,168,Youngs Bay Hatchery Marked,14_2,youngh
+KLASKANINE R N FK,14,2,168,Youngs Bay Hatchery Marked,14_2,youngh
+TUCKER CR (YOUNGS R),14,2,168,Youngs Bay Hatchery Marked,14_2,youngh
+YOUNGS R & BAY,14,2,168,Youngs Bay Hatchery Marked,14_2,youngh
+KLASKANINE R S FK,14,2,168,Youngs Bay Hatchery Marked,14_2,youngh
+COWLITZ R    26.0002,14,6,176,Columbia River Late Hatchery Marked,14_6,colrlh
+KALAMA R     27.0002,14,6,176,Columbia River Late Hatchery Marked,14_6,colrlh
+KLICKITAT+ WASHOUGAL,14,6,176,Columbia River Late Hatchery Marked,14_6,colrlh
+NA,25,1,NA,NA,25_1,bccnhw
+NA,26,1,NA,NA,26_1,bcnchw
+NA,14,3,NA,NA,14_3,sandew
+NA,14,4,NA,NA,14_4,clakew
+NA,14,5,NA,NA,14_5,claklw
+NA,22,2,NA,NA,22_2,frslww
+NA,22,1,NA,NA,22_1,frslwh
+NA,23,1,NA,NA,23_1,frsuph
+NA,23,2,NA,NA,23_2,frsupw
+NA,12,1,NA,NA,12_1,chehlw
+NA,12,5,NA,NA,12_5,gryhmw
+NA,12,3,NA,NA,12_3,humptw
+NA,17,1,NA,NA,17_1,gsmndh
+NA,17,2,NA,NA,17_2,gsmndw
+NA,18,1,NA,NA,18_1,gsvcih
+NA,18,2,NA,NA,18_2,gsvciw
+NA,9,1,NA,NA,9_1,hohrvw
+NA,4,6,NA,NA,4_6,ar12aw
+NA,4,8,NA,NA,4_8,ar12dw
+NA,4,3,NA,NA,4_3,ar12bw
+NA,4,2,NA,NA,4_2,ptgamw
+NA,4,10,NA,NA,4_10,skokrw
+NA,19,1,NA,NA,19_1,jnstrh
+NA,19,2,NA,NA,19_2,jnstrw
+NA,7,1,NA,NA,7_1,makahw
+NA,28,1,NA,NA,28_1,nasshw
+NA,31,1,NA,NA,31_1,niakhw
+NA,32,1,NA,NA,32_1,noakhw
+NA,1,8,NA,NA,1_8,whatch
+NA,1,7,NA,NA,1_7,ar77aw
+NA,1,6,NA,NA,1_6,samshw
+NA,1,1,NA,NA,1_1,nkskrw
+NA,21,1,NA,NA,21_1,nwvcih
+NA,21,2,NA,NA,21_2,nwvciw
+NA,16,1,NA,NA,16_1,oresoh
+NA,16,2,NA,NA,16_2,oresow
+NA,16,5,NA,NA,16_5,calcnh
+NA,16,3,NA,NA,16_3,calnoh
+NA,16,4,NA,NA,16_4,calnow
+NA,16,6,NA,NA,16_6,calcnw
+NA,15,8,NA,NA,15_8,oresmw
+NA,15,10,NA,NA,15_10,oraqah
+NA,15,9,NA,NA,15_9,oranah
+NA,15,5,NA,NA,15_5,orenmh
+NA,15,4,NA,NA,15_4,orenow
+NA,15,6,NA,NA,15_6,orenmw
+NA,15,3,NA,NA,15_3,orenoh
+NA,15,7,NA,NA,15_7,oresmh
+NA,27,1,NA,NA,27_1,quenhw
+NA,10,3,NA,NA,10_3,quetph
+NA,10,1,NA,NA,10_1,quetfw
+NA,8,3,NA,NA,8_3,quilfw
+NA,8,1,NA,NA,8_1,quilsw
+NA,8,2,NA,NA,8_2,quilsh
+NA,11,1,NA,NA,11_1,quinfw
+NA,33,1,NA,NA,33_1,siakhw
+NA,6,8,NA,NA,6_8,area9w
+NA,6,3,NA,NA,6_3,elwhaw
+NA,6,5,NA,NA,6_5,ejdfmw
+NA,6,1,NA,NA,6_1,dungew
+NA,6,6,NA,NA,6_6,wjdfmw
+NA,2,1,NA,NA,2_1,skagtw
+NA,2,3,NA,NA,2_3,skgbkw
+NA,29,1,NA,NA,29_1,skeehw
+NA,34,1,NA,NA,34_1,soakhw
+NA,5,22,NA,NA,5_22,are10h
+NA,5,17,NA,NA,5_17,ar10ew
+NA,5,23,NA,NA,5_23,ar10mw
+NA,5,15,NA,NA,5_15,ar11mw
+NA,5,11,NA,NA,5_11,ar13aw
+NA,5,1,NA,NA,5_1,ar13bw
+NA,5,8,NA,NA,5_8,ar13mw
+NA,5,9,NA,NA,5_9,chambh
+NA,5,2,NA,NA,5_2,deschw
+NA,5,13,NA,NA,5_13,puyalw
+NA,5,21,NA,NA,5_21,lakwaw
+NA,5,19,NA,NA,5_19,greenw
+NA,5,5,NA,NA,5_5,nisqlw
+NA,3,4,NA,NA,3_4,snohow
+NA,3,1,NA,NA,3_1,stillw
+NA,20,1,NA,NA,20_1,swvcih
+NA,20,2,NA,NA,20_2,swvciw
+NA,24,1,NA,NA,24_1,thomph
+NA,24,2,NA,NA,24_2,thompw
+NA,30,1,NA,NA,30_1,tranhw
+NA,13,1,NA,NA,13_1,willaw
