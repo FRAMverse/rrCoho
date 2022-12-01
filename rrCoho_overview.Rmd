@@ -2,6 +2,10 @@
 title: "rrCoho overview"
 author: "Dan.Auerbach@dfw.wa.gov"
 date: "`r Sys.Date()`"
+params:
+  file_path_escp: "copy_of_fram_coho_escapement_2022.xlsx"
+  file_path_crc: "T:/DFW-Salmon Mgmt Modeling Team - General/Catch datasets/CRC/Sport Harvest Estimates 20220302.mdb"
+  file_path_tocas: "T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/tocas_coho_2000-present.csv"
 editor_options: 
   chunk_output_type: console
 output: 
@@ -27,14 +31,13 @@ lu <- list(
   crc_fram = as_tibble(framr::lu_coho_crc_fram),
   tocas_fram = as_tibble(framr::lu_coho_tocas_fram),
   #fishtix_fram?
-  #rmis_fram_fishery = readr::read_csv("https://raw.githubusercontent.com/PSC-CoTC/coho_CWT_analysis/main/lu_ahb_FishMap_20220826.csv")
   rmis_fram_fishery = readr::read_csv("lu_ahb_FishMap_20220826.csv") |> 
     filter(Num_Chars > 0) |> 
     select(FisheryID, FisheryName, fishery_single = Gear, Num_Chars, PSC_Code) |>
     distinct(FisheryID, FisheryName, fishery_single, Num_Chars, PSC_Code),
   
   rmis_fram_pr_mu = readr::read_csv(
-    #unmodified other than field names: 'O:/code/coho/rrterm/MB_Draft_2020/ReferenceFiles_4Rcode/Table1rv_RelLocName_Region_Stock_111319_Hatch.csv'
+    #unmodified other than field names: 'T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/ReferenceFiles_4Rcode/Table1rv_RelLocName_Region_Stock_111319_Hatch.csv'
     "lu_mb_rmis_RelLoc20191113.csv"
   ) |> arrange(PR_Number, PR_MU_Number),
     
@@ -42,24 +45,34 @@ lu <- list(
   ca_pr_mu = readr::read_csv("lu_CA_PR_MU.csv")
 )
 
-#lu$tocas_fram <- readxl::read_excel("O:/code/framr/xlsx/lu_coho.xlsx", sheet = "TOCAS_FRAM")
-#lu$fram_ca <- readr::read_csv("lu_FRAM_CA.csv")
-
 data_in <- list()
 
-# params:
-#   file_escp:
-#     - target version of CoTC escapement compilation file? Not yet a function since just a simple readxl
-#   file_crc:
-#     - target sport harvest mdb; this can/should change if/when a directly query-able resource becomes available
-#   file_tocas:
-#     - target for TOCAS query dataset
+
 
 
 mb20 <- list()
-mb20$escp <- read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Escapement_Inputs/MU_Escapement_013122.csv")
-mb20$crc <- read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Landings_Sport/RRTerm_CA_Catch_FinalInputSpt_RegularTS_012722.csv")
-mb20$tocas <- read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Landings_Commercial/RRTerm_CA_Catch_CommFinalwNames_RegularTS_121621.csv")
+mb20$escp <- read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/Data_ProcessingSteps/Escapement_Inputs/MU_Escapement_013122.csv")
+mb20$crc <- read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/Data_ProcessingSteps/Landings_Sport/RRTerm_CA_Catch_FinalInputSpt_RegularTS_012722.csv")
+mb20$tocas <- read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/Data_ProcessingSteps/Landings_Commercial/RRTerm_CA_Catch_CommFinalwNames_RegularTS_121621.csv")
+
+#only a few years, mostly 2019-2020, as raw files
+#still silly big number of columns
+mb20$cwt_raw <- left_join(
+  readr::read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/Data_ProcessingSteps/Raw_RMIS_CWTQueryData/Recovery_Data_121621/CSV6559.csv")
+  ,
+  readr::read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/Data_ProcessingSteps/Raw_RMIS_CWTQueryData/Release_Data_121621/CSV6205.csv") |> 
+    select(
+      tag_code = tag_code_or_release_id,
+      brood_year, rearing_type,
+      release_location_code, release_location_name, 
+      cwt_1st_mark, cwt_1st_mark_count, 
+      cwt_2nd_mark, cwt_2nd_mark_count, 
+      non_cwt_1st_mark, non_cwt_1st_mark_count, 
+      non_cwt_2nd_mark, non_cwt_2nd_mark_count)
+  #or: "T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/Data_ProcessingSteps/Raw_RMIS_CWTQueryData/AllRelease_Data_123021/CSV1601.csv"
+  ,
+  by = c("tag_code", "brood_year")
+  ) #|> names()
 
 ```
 
@@ -81,8 +94,7 @@ https://fisheriesservices.nwifc.org/fram-model-runs/preseason-fram-model-prepara
 # Established lookups
 
 ```{r read_rrterm_mdb, eval=FALSE}
-#db <- "O:/code/coho/rrterm/CohoRR_4_CoManagerReview_020221/RRT_CO_2019-10_2021-02-02.mdb"
-db <- "O:/code/coho/rrterm/CohoRR_4_CoMngrReview_wHC_013122/RRT_CO_2020-10_2022_01_31rv.mdb"
+db <- "T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/CohoRR_4_CoMngrReview_wHC_013122/RRT_CO_2020-10_2022_01_31rv.mdb"
 
 db_con <- DBI::dbConnect(drv = odbc::odbc(), .connection_string = paste0("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=", db, ";"))
 
@@ -154,7 +166,7 @@ DBI::dbDisconnect(db_con)
 #   ) |>
 #   select(FisheryID = FRAM_CA_Number, CA_Number, CA_Short_Name, CWT_Flag, Cat_Flag, Type_Calc) |>
 #   left_join(
-#     read_csv("O:/code/coho/rrterm/MB_Draft_2020/ReferenceFiles_4Rcode/Fishery_CohoFRAM_wType_101018.csv") |>
+#     read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/ReferenceFiles_4Rcode/Fishery_CohoFRAM_wType_101018.csv") |>
 #       select(FisheryID, RRTermType),
 #     by = "FisheryID"
 #   ) |>
@@ -165,7 +177,7 @@ DBI::dbDisconnect(db_con)
 # lu$fram_ca |> 
 #   drop_na(FisheryID) |> 
 #   full_join(
-#     read_csv("O:/code/coho/rrterm/MB_Draft_2020/ReferenceFiles_4Rcode/FRAMFisheryID_2_RRTermCANumber.csv") #no duplicate FisheryID, |> count(FRAM_FisheryID) |> filter(n>1)
+#     read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/ReferenceFiles_4Rcode/FRAMFisheryID_2_RRTermCANumber.csv") #no duplicate FisheryID, |> count(FRAM_FisheryID) |> filter(n>1)
 #     ,
 #     by = c("FisheryID" = "FRAM_FisheryID")
 #   ) |> 
@@ -192,7 +204,7 @@ DBI::dbDisconnect(db_con)
 # #used as "RelLoc_MB" in "CWT_PostProcess_StockMethod"
 # full_join(
 #   #RMIS release_loc to RRTerm PR/PR_MU and FRAM
-#   read_csv('O:/code/coho/rrterm/MB_Draft_2020/ReferenceFiles_4Rcode/Table1rv_RelLocName_Region_Stock_111319_Hatch.csv') |>
+#   read_csv('T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/ReferenceFiles_4Rcode/Table1rv_RelLocName_Region_Stock_111319_Hatch.csv') |>
 #     select(release_location_name,
 #            PR_Number = RRTerm_PR,
 #            PR_MU_Number = RRTerm_PR_MU,
@@ -205,7 +217,7 @@ DBI::dbDisconnect(db_con)
 #   #MB used a MU_Data[which(MU_Data$FRAM_MU_Number>0),]
 #   #would prefer an approach that avoids reliance on unknown field "FRAM_MU_Number" which is not StockID
 #   #but whole thing warrants revision
-#   read_csv('O:/code/coho/rrterm/MB_Draft_2020/ReferenceFiles_4Rcode/MU_Data_RRTermDB_072817.csv') |>
+#   read_csv('T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/ReferenceFiles_4Rcode/MU_Data_RRTermDB_072817.csv') |>
 #     # #works but not completely matching MU_Short_Name strings since no way to tell which to use...
 #     # distinct(PR_Number, PR_MU_Number, .keep_all = T) |> select(PR_Number, PR_MU_Number, MU_Short_Name) |>
 #     drop_na(FRAM_MU_Number) |> 
@@ -231,7 +243,7 @@ but underlying compilation of values in 'dataset' only partially scriptable; see
 
 ```{r read_escp}
 data_in$escp <- readxl::read_excel(
-  path = "copy_of_fram_coho_escapement_2022.xlsx",
+  path = params$file_path_escp,
   sheet = "dataset"
 )|> 
   group_by(year, RRTerm_PR, RRTerm_PR_MU) |> 
@@ -265,10 +277,12 @@ Hopefully some/all of this gets revised to query the combined data source ("Harv
 ## Recreational: CRC
 
 ```{r read_crc_coho}
-#readRDS("T:/DFW-Salmon Mgmt Modeling Team - General/Catch datasets/CRC/d_spt_hvst_est_20220302.rds")
-
-db_crc <- "T:/DFW-Salmon Mgmt Modeling Team - General/Catch datasets/CRC/Sport Harvest Estimates 20220302.mdb"
-db_con <- DBI::dbConnect(drv = odbc::odbc(), .connection_string = paste0("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=",db_crc,";"))
+db_con <- DBI::dbConnect(
+  drv = odbc::odbc(),
+  .connection_string = paste0(
+    "Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=",
+    params$file_path_crc,
+    ";"))
 
 data_in$crc <- dplyr::left_join(
   dplyr::collect(dplyr::tbl(db_con, "Catch")) |> 
@@ -314,7 +328,6 @@ data_in$crc <- dplyr::left_join(
   data_in$crc,
   dplyr::select(lu$crc_fram, -FisheryID_alt),
   by = "area_code")
-  #rrCoho::assign_fram_fishery_to_crc(data_in$crc)
 
 ##unassigned
 #data_in$crc |> filter(is.na(FisheryID)) |> count(area_code, areaname) |> arrange(area_code) |> print(n=100)
@@ -385,7 +398,7 @@ Unfortunately, do not appear to actually have original raw TOCAS data: "mbellman
 EDA on test version of this pretty open ended query run by Ty + Maria
 
 ```{r read_tocas}
-data_in$tocas <- read_csv("O:/code/coho/rrterm/tocas_coho_2000-present.csv") |> 
+data_in$tocas <- read_csv(params$file_path_tocas) |> 
   filter(Disposition %in% c("C&SF", "COMM", "ORGN", "TEST","TKHM")) |> 
   mutate(
     landing_date = as.Date(Landing_Date, format = "%m/%d/%Y"),
@@ -606,12 +619,6 @@ Working through 2 primary MB scripts:
 
 ## FRAM fishery assignment
 
- - RMIS - Tagged Releases
- - Recoveries by Tag Code
- - Tag Status = 1
- - Species = 2 (coho)
- - Recovery Year = ...
-
 MB create `clip_status` == 1 as `between(cwt_1st_mark, 5000, 6000)`
   not creating field for now, 
 Drop sample_type == 5
@@ -620,31 +627,11 @@ MB escapement separating out C&S, so `fishery %in% c(50:54,57:59)`, excluding RM
 
 
 ```{r rmis_rr_to_fram}
-# #MB wrangled rec-rel, silly big file
-# mb20$cwt_prefram <- readr::read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Fishery_Method_Files_CWT/rec10_4merge_121621.csv")
-
-#only a few years, mostly 2019-2020, as raw files
-#still silly big number of columns
-mb20$cwt_raw <- left_join(
-  readr::read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Raw_RMIS_CWTQueryData/Recovery_Data_121621/CSV6559.csv")
-  ,
-  readr::read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Raw_RMIS_CWTQueryData/Release_Data_121621/CSV6205.csv") |> 
-    select(
-      tag_code = tag_code_or_release_id,
-      brood_year, rearing_type,
-      release_location_code, release_location_name, 
-      cwt_1st_mark, cwt_1st_mark_count, 
-      cwt_2nd_mark, cwt_2nd_mark_count, 
-      non_cwt_1st_mark, non_cwt_1st_mark_count, 
-      non_cwt_2nd_mark, non_cwt_2nd_mark_count)
-  #or: "O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Raw_RMIS_CWTQueryData/AllRelease_Data_123021/CSV1601.csv"
-  ,
-  by = c("tag_code", "brood_year")
-  ) #|> names()
-
 
 #could filter on cwt_1st_mark and rearing_type immediately?
 #see below where going between 5000:6000 and in H&M (no W or U)
+#note that escapements being excluded at this stage (as they would not map to FisheryID anyway)
+#can easily use Stock chunk below to map escp recoveries if needed
 rmis_rr <- mb20$cwt_raw |> 
   filter(
     sample_type != 5,
@@ -763,7 +750,7 @@ rmis_rr |>
 # #where a single CA_Number is associated to distinct FisheryIDs
 # #now irrelevant/unnecessary given aggregation to appropriately duplicated CA_Number
 # #within lu$fram_ca; see above creation chunk
-# read_csv('O:/code/coho/rrterm/MB_Draft_2020/ReferenceFiles_4Rcode/EditDisCAData_FramCANum_2OldRRTerm_080217.csv') |> 
+# read_csv('T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/ReferenceFiles_4Rcode/EditDisCAData_FramCANum_2OldRRTerm_080217.csv') |> 
 #   filter(Fram_CA_Number != OldRR_FRAMCANumber) |> print(n=30)
 # lu$fram_ca |> filter(FisheryID %in% 153:160) |> arrange(FisheryID)
 
@@ -780,12 +767,12 @@ Post-processed CWT recovery dataset output from: CohoRR_CWT_PostProcess_FisheryM
 
 ```{r rmis_rr_to_fram_pr_mu}
 ##massive file, not worth reading in unless essential
-#read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Fishery_Method_Files_CWT/END_MSMFisheryMapping_Match3_010322.csv")
+#read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/Data_ProcessingSteps/Fishery_Method_Files_CWT/END_MSMFisheryMapping_Match3_010322.csv")
 
 # #basically targeting this:
-# read_csv("O:/code/coho/rrterm/MB_Draft_2020/RRTerm_Automated_DataInputs/CWT_Rec_4OldRRTerm_RegularTS_010422_20onlyrv.csv")
+# read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/RRTerm_Automated_DataInputs/CWT_Rec_4OldRRTerm_RegularTS_010422_20onlyrv.csv")
 # #derived from 
-# "O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Stock_Method_Files_CWT/Reg1-6AllFisheryCWTRecov_FRAMFisheryStock_010422.csv"
+# "T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/Data_ProcessingSteps/Stock_Method_Files_CWT/Reg1-6AllFisheryCWTRecov_FRAMFisheryStock_010422.csv"
 
 #add StockID and PR_MU
 rmis_rr <- rmis_rr |> 
@@ -831,7 +818,7 @@ rmis_rr |>
   ) |> 
   filter(year == 2020) |> 
   full_join(
-    read_csv("O:/code/coho/rrterm/MB_Draft_2020/RRTerm_Automated_DataInputs/CWT_Rec_4OldRRTerm_RegularTS_010422_20onlyrv.csv")
+    read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/RRTerm_Automated_DataInputs/CWT_Rec_4OldRRTerm_RegularTS_010422_20onlyrv.csv")
     ,
    by = c("CA_Number", "MU_Short_Name")
   ) |> 
@@ -851,6 +838,9 @@ MB calc for all releases ever, need to maintain that or okay to operate only on 
 
 Bigger question - appears to calc summaries on StockID/PR_MU rather than tag_code level...
 
+Confirmed with AHB that we want to build ratio from tagged+marked only, not including UM+tagged (as when cwt_2nd_mark==0000 and cwt_2nd_mark_count > 0)...because only examining marked recoveries (and tagged by def of being recovered).
+
+
 ```{r pef}
 # #MB filters on rel_age==2 (constructing 'Match4' obj)
 # Match2$rel_age = Match2$last_release_date_year - Match2$brood_year
@@ -866,7 +856,8 @@ rmis_rr |>
     across(ends_with("_count"), ~replace_na(.,0))
     ) |> 
   #count(cwt_1st_mark, cwt_2nd_mark)
-  filter(Run_ID==2020, PR_MU=="1_4")
+#filter(Run_ID==2020, PR_MU=="1_4") |> select(PR_MU, tag_code, cwt_1st_mark:FisheryID)
+#filter(Run_ID==2020, PR_MU=="1_3") |> select(PR_MU, tag_code, cwt_1st_mark:FisheryID)
   group_by(
     Run_ID, StockID, PR_MU, tag_code
     ) |> 
@@ -874,26 +865,26 @@ rmis_rr |>
   summarise(
     rel_tot = cwt_1st_mark_count + cwt_2nd_mark_count + non_cwt_1st_mark_count + non_cwt_2nd_mark_count,
     rel_m_cwt_1st = if_else(between(as.integer(cwt_1st_mark), 5000, 6000), cwt_1st_mark_count, 0),
-    rel_m_cwt_2nd = if_else(between(as.integer(cwt_2nd_mark), 5000, 6000), cwt_2nd_mark_count, 0)
+    rel_m_cwt_2nd = if_else(between(as.integer(cwt_2nd_mark), 5000, 6000), cwt_2nd_mark_count, 0),
+    across(starts_with("rel_m_cwt"), ~replace_na(.,0)),
+    pef = rel_tot / rel_m_cwt_1st + rel_m_cwt_2nd
   ) |> 
-  filter(Run_ID==2020)
-
-#need to sort with AHB exactly what the desired/intented calculation should be
-#appears that, for example, the 559 UM-but-tagged Skookum count (cwt_2nd_mark==0000) is being included in the "marked only" denominator
-
-
+  filter(Run_ID==2020) |> 
+  full_join(
+    #object export with "_Num" and "_Den" fields
+    read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/Data_ProcessingSteps/PEF_Method_Files/LocalPEF_Match5sum_010422.csv") |> 
+      filter(Run_ID == 2020) |> 
+      select(Run_ID, StockID = FRAM_StockID, Local_PEF_Num:Local_PEF)
+    ,
+    by = c("Run_ID", "StockID")
+  )
 
 
 #Access table format, all years...
-read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/PEF_Method_Files/MU_Local_PEF_010422.csv") |> 
+##read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/Data_ProcessingSteps/PEF_Method_Files/MU_Local_PEF_010422.csv") |> 
+read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/RRTerm_Automated_DataInputs/MU_Local_PEF_010422rv.csv") |> 
   filter(Run_ID == 2020)
-#object export with "_Num" and "_Den" fields
-read_csv("O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/PEF_Method_Files/LocalPEF_Match5sum_010422.csv") |> 
-    filter(Run_ID == 2020)
 
-
-
-"O:/code/coho/rrterm/MB_Draft_2020/Data_ProcessingSteps/Raw_RMIS_CWTQueryData/AllRelease_Data_123021/CSV1601.csv"
 
 
 ```
@@ -952,7 +943,6 @@ hvst_cwt_pef_escp <- rr$hvst |>
   #drop a few cols for easier dev
   select(-ends_with("_CV"))
 ```
-
 
 ```{r }
 # #do anything with these?
