@@ -74,6 +74,12 @@ mb20$cwt_raw <- left_join(
   by = c("tag_code", "brood_year")
   ) #|> names()
 
+
+# #Access table format, all years...
+# read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/Data_ProcessingSteps/PEF_Method_Files/MU_Local_PEF_010422.csv")
+mb20$pef <- read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/RRTerm_Automated_DataInputs/MU_Local_PEF_010422rv.csv") 
+
+
 ```
 
 
@@ -189,13 +195,20 @@ DBI::dbDisconnect(db_con)
 #   print(n=200)
   
 
-
-# #mapping RRterm fishery CAs to stock PR+PR_MU
-# #the key crosswalk to assign catches to associated stocks
+# # #mapping RRterm fishery CAs to stock PR+PR_MU
+# # #the key crosswalk to assign catches to associated stocks
+# # #fixing MU_Short_Name switch for Baker wild/hat
+# # #wild is 2_3, hat is 2_4 in MU_data table 
+# # rr$lu_mu |> filter(PR_Number==2, between(PR_MU_Number, 3, 4)) |> arrange(PR_MU_Number)
+# # #but ca_pr_mu has hatchery/skgbkh to 3 and wild/skgbkw to 4 
+# # rr$lu_ca_mu |> filter(PR_Number==2, between(PR_MU_Number, 3, 4)) |> arrange(PR_MU_Number)
 # rr$lu_ca_mu |> 
-#   mutate(PR_MU = paste(PR_Number, PR_MU_Number, sep = "_")) |> 
+#   mutate(
+#     PR_MU = paste(PR_Number, PR_MU_Number, sep = "_"),
+#     MU_Short_Name = if_else(PR_Number == 2 & PR_MU_Number == 3, "skgbkw", MU_Short_Name),
+#     MU_Short_Name = if_else(PR_Number == 2 & PR_MU_Number == 4, "skgbkh", MU_Short_Name)
+#     ) |>
 #   write_csv("lu_CA_PR_MU.csv")
-
 
 
 # #mapping RMIS "release_location_name" strings to RRTerm PR_MU and FRAM StockID
@@ -272,8 +285,6 @@ full_join(
 
 # Catches
 
-Hopefully some/all of this gets revised to query the combined data source ("HarvestCube") project from JohnChen/Eric K/Brodie?
-
 ## Recreational: CRC
 
 ```{r read_crc_coho}
@@ -340,12 +351,10 @@ Catches only summed from FRAM timestep 3+4+5 FW or 4+5 Marine (Aug+Sep+Oct-Nov).
 
 Seems undesirable to DA, but persisting per AHB. Apparently "dip-in" concerns.
 
-Near exact agreement, differences almost certainly related to using newer CRC.
-
-```{r compare_crc}
+```{r data_in_crc_ca}
 #maintaining FW 3+4+5, M 4+5 per AHB, but would prefer not to exclude pre-Aug catch on basis of 'dip in' concerns
 #no idea how CWT_Flag, Cat_Flag, Type_Calc are used
-data_in$crc |> 
+data_in$crc_ca <- data_in$crc |> 
   drop_na(FisheryID) |> 
   inner_join(lu$fram_ca, by = "FisheryID") |> 
   drop_na(RRTermType) |> 
@@ -358,7 +367,13 @@ data_in$crc |>
       RRTermType == "FW" ~ `3` + `4` + `5`,
       RRTermType == "M" ~ `4` + `5`
     )
-  ) |> 
+  )
+```
+
+Near exact agreement, differences almost certainly related to using newer CRC.
+
+```{r compare_crc}
+data_in$crc_ca |> 
   filter(year == 2020) |> 
   left_join(
     mb20$crc |> filter(Run_ID == 2020),
@@ -417,15 +432,14 @@ data_in$tocas <- read_csv(params$file_path_tocas) |>
 #data_in$tocas |> count(Disposition)
 ```
 
-Reasonable agreement where fisheries/CAs are not dropped...need to work on LU for dropped fisheries/CAs
+Associate to FRAM FisheryID then RRterm CA
 
-```{r compare_tocas}
-data_in$tocas |> 
+```{r data_in_tocas_ca}
+data_in$tocas_ca <- data_in$tocas |> 
   group_by(year, ts, Fishery, TribeName, Gear, Disposition, Catch_Area) |> 
   summarise(catch = sum(Units), .groups = "drop") |> 
 #However, TribeName may need this soln? unique(lu_coho_tocas_fram$TribeName)
   mutate(
-    #Disposition = if_else(Disposition %in% c("TEST", "Test", "C&SF"), Disposition, NA_character_),
     TribeName = if_else(TribeName %in% c("QUINAULT - 18", "CHEHALIS - 02"), TribeName, NA_character_)
   ) |> 
   left_join(
@@ -446,166 +460,19 @@ data_in$tocas |>
       RRTermType == "FW" ~ `3` + `4` + `5`,
       RRTermType == "M" ~ `4` + `5`
     )
-  ) |> 
+  )
+```
+
+Good agreement
+
+```{r compare_tocas}
+data_in$tocas_ca |> 
   filter(year == 2020) |> 
   full_join(
     mb20$tocas |> filter(Run_ID == 2020) |> select(year = Run_ID, CA_Number, CA_Short_Name, Catch),
     by = c("year", "CA_Number")
   ) |> 
   mutate(d = catch - Catch) |> print(n=40)
-
-
-
-lu$tocas_fram |> filter(FisheryID %in% c(155, 156))
-data_in$tocas |> 
-  group_by(year, ts, Fishery, TribeName, Gear, Disposition, Catch_Area) |> 
-  summarise(catch = sum(Units), .groups = "drop") |> 
-  filter(year == 2020, str_detect(Catch_Area, "6D"))
-
-```
-
-
-## Commercial: FishTicket
-
-MB appears to have used TOCAS exclusively.
-
-```{r ft_pull, eval=FALSE}
-#con_ft <- assign connection here
-
-#Not limited to PS commercial in FRAM - various ColR and coastal catches...
-ft_pull <- inner_join(
-  tbl(con_ft, dbplyr::in_schema(schema = "Reporting", table = "vFishTicketCat2")),
-  tbl(con_ft, dbplyr::in_schema(schema = "Reporting", table = "vFishTicketDetailCat2"))
-  , by = c("FishTicketID")
-  ) |> 
-  filter(
-    ReleaseStatus == "Completed",
-    MarketSpeciesCategoryName == "COHO",
-    BatchYear >= 2015, 
-    LegalAuthoritySourceCode != "impt",
-    LegalAuthoritySourceCode != "invo",
-    LegalAuthoritySourceCode != "aqua"
-  ) |> 
-  group_by(
-    BatchYear, LandingMonth,
-    CatchAreaCode, CatchAreaDescription,
-    FisherTypeDescription, GearCode
-  ) |> 
-  summarize(rc = sum(ReportedCount), .groups = "drop") |>  #server-side '.group = "drop"' not working; adds a new field "group" and retains groups
-  collect() |> 
-  mutate(
-    across(contains("AreaCode"), str_trim),
-    gear = if_else(GearCode %in% c(10,41), "line", "net"),
-  ts = case_when(
-    LandingMonth < 7 ~ 1,
-    LandingMonth == 7 ~ 2,
-    LandingMonth == 8 ~ 3,
-    LandingMonth == 9 ~ 4,
-    LandingMonth > 9 ~ 5
-    )
-  )
-
-DBI::dbDisconnect(con_ft)
-
-rm(con_ft)
-
-saveRDS(ft_pull, "temp_ft_pull.rds")
-```
-
-```{r}
-ft_pull <- readRDS("temp_ft_pull.rds")
-
-ft_pull |> 
-  #distinct(CatchAreaCode, CatchAreaDescription, FisherTypeDescription, GearCode, gear) |> writexl::write_xlsx("temp_fishtix.xlsx")
-  group_by(year = BatchYear, CatchAreaCode, CatchAreaDescription, FisherTypeDescription, gear, ts) |> 
-  summarise(rc = sum(rc), .groups = "drop") 
-
-# mutate(
-#   FisheryID = case_when(
-#     ~ 34, #A1-Ast Trl	WA Area 1 & Astoria Troll
-#     ~ 35, #Area2Trl NT	WA Area 2 Non-Treaty Troll
-#     ~ 36, #Area2TrlTR	WA Area 2 Treaty Troll
-#     ~ 38, #WA Area 3 Non-Treaty troll
-#     ~ 39, #WA Area 3 Treaty troll
-#     ~ 42,	#A4/4BTrlNT	WA Area 4/4B Non-Treaty Troll
-#     ~ 43,	#A4/4BTrlTR	WA Area 4/4B Treaty Troll
-#     ~ 44, #A5-6C Trl	WA Area 5-6-6C Troll; all Treaty troll
-#     ~ 47, #WlpaBT Net	Willapa Bay & FW Trib Net; all 22-14, Non-treaty Drift Gillnet
-#     
-#     CatchAreaCode & FisherTypeDescription  ~ 50, #GryHbr Net	Grays Harbor Estuary Net; all NT drift gillnet
-#     
-#     CatchAreaCode & FisherTypeDescription  ~ 52, #LwCheh Net	Lower Chehalis R Net
-#     CatchAreaCode & FisherTypeDescription  ~ 55, #Hump R Net	Humptulips R Net
-#     CatchAreaCode & FisherTypeDescription  ~ 56, #UpCheh Net	Upper Chehalis R Net
-#     CatchAreaCode & FisherTypeDescription  ~ 63, #Quin R Net	Quinault R Net
-#     CatchAreaCode & FisherTypeDescription  ~ 68, #Queets Net	Queets R Net
-#     CatchAreaCode & FisherTypeDescription  ~ 71, #Quilly Net	Quillayute R Net; should this get the 770 Sol Duc R recs?
-#     CatchAreaCode & FisherTypeDescription  ~ 74, #Hoh R  Net	Hoh R Net
-#     CatchAreaCode & FisherTypeDescription  ~ 77, #Mak FW Net	Makah Freshwater Net
-#     CatchAreaCode & FisherTypeDescription ~ 79,	#A 4-4A Net	WA Area 4-4A Net
-#     CatchAreaCode & FisherTypeDescription  ~ 80, #A4B6CNetNT	WA Area 4B-5-6C Non-Treaty Net; not assigned 23-16 Set Gillnet, 23-52 Mixed Net
-#     CatchAreaCode & FisherTypeDescription  ~ 81, #A4B6CNetTR	WA Area 4B-5-6C Treaty Net; assigned 23-16 Set Gillnet, 23-52 Mixed Net
-#     CatchAreaCode & FisherTypeDescription  ~ 82, #Ar6D NetNT	6D Non-Treaty Net (Dungeness Bay & R); no FW net recs with "DUNGENESS" in name
-#     CatchAreaCode & FisherTypeDescription  ~ 83, #Ar6D NetTR	6D Treaty Net (Dungeness Bay & R); no FW net recs with "DUNGENESS" in name
-#     
-#     CatchAreaCode & FisherTypeDescription  ~ 84, #Elwha  Net	Elwha R Net
-#     CatchAreaCode & FisherTypeDescription ~ 85,	#WJDF T Net	West JDF Straits Trib Net
-#     CatchAreaCode & FisherTypeDescription ~ 86,	#EJDF T Net	East JDF Straits Trib Net
-#     CatchAreaCode & FisherTypeDescription  ~ 87, #A6-7ANetNT	WA Area 7-7A Non-Treaty Net
-#     CatchAreaCode & FisherTypeDescription  ~ 88, #A6-7ANetTR	WA Area 7-7A Treaty Net
-#     
-#     CatchAreaCode & FisherTypeDescription ~ # 96	A7BCDNetNT	WA Area 7B-7C-7D Non-Treaty Net
-#       CatchAreaCode & FisherTypeDescription ~ # 97	A7BCDNetTR	WA Area 7B-7C-7D Treaty Net
-#       CatchAreaCode & FisherTypeDescription ~ # 98	Nook R Net	Nooksack R Net
-#       CatchAreaCode & FisherTypeDescription ~ # 101	Ar 8 NetNT	WA Area 8 Non-Treaty Net (Skagit)
-#       CatchAreaCode & FisherTypeDescription ~ # 102	Ar 8 NetTR	WA Area 8 Treaty Net (Skagit)
-#       CatchAreaCode & FisherTypeDescription ~ # 103	Skag R Net	Skagit R Net
-#       CatchAreaCode & FisherTypeDescription ~ # 104	SkgR TsNet	Skagit River Test Net
-#       CatchAreaCode & FisherTypeDescription ~ # 105	SwinCh Net	Swinomish Channel Net
-#       CatchAreaCode & FisherTypeDescription ~ # 109	Ar8A NetNT	WA Area 8A Non-Treaty Net
-#       CatchAreaCode & FisherTypeDescription ~ # 110	Ar8A NetTR	WA Area 8A Treaty Net
-#       CatchAreaCode & FisherTypeDescription ~ # 111	Ar8D NetNT	WA Area 8D Non-Treaty Net (Tulalip Bay)
-#       CatchAreaCode & FisherTypeDescription ~ # 112	Ar8D NetTR	WA Area 8D Treaty Net (Tulalip Bay)
-#       CatchAreaCode & FisherTypeDescription ~ # 113	Stil R Net	Stillaguamish R Net
-#       CatchAreaCode & FisherTypeDescription ~ # 114	Snoh R Net	Snohomish R Net
-#       CatchAreaCode & FisherTypeDescription ~ # 119	Ar10 NetNT	WA Area 10 Non-Treaty Net (Seattle)
-#       CatchAreaCode & FisherTypeDescription ~ # 120	Ar10 NetTR	WA Area 10 Treaty Net (Seattle)
-#       CatchAreaCode & FisherTypeDescription ~ # 121	Ar10ANetNT	WA Area 10A Non-Treaty Net (Elliott Bay)
-#       CatchAreaCode & FisherTypeDescription ~ # 122	Ar10ANetTR	WA Area 10A Treaty Net (Elliott Bay)
-#       CatchAreaCode & FisherTypeDescription ~ # 123	Ar10ENetNT	WA Area 10E Non-Treaty Net (East Kitsap)
-#       CatchAreaCode & FisherTypeDescription ~ # 124	Ar10ENetTR	WA Area 10E Treaty Net (East Kitsap)
-#       CatchAreaCode & FisherTypeDescription ~ # 125	10F-G  Net	WA Area 10F-G Treaty Net (Lake Union)
-#       CatchAreaCode & FisherTypeDescription ~ # 126	Duwm R Net	Green/Duwamish R Net
-#       CatchAreaCode & FisherTypeDescription ~ # 130	Ar11 NetNT	WA Area 11 Non-Treaty Net (E/W Pass)
-#       CatchAreaCode & FisherTypeDescription ~ # 131	Ar11 NetTR	WA Area 11 Treaty Net (E/W Pass)
-#       CatchAreaCode & FisherTypeDescription ~ # 132	Ar11ANetNT	WA Area 11A Non-Treaty Net (Comm. Bay)
-#       CatchAreaCode & FisherTypeDescription ~ # 133	Ar11ANetTR	WA Area 11A Treaty Net (Comm. Bay)
-#       CatchAreaCode & FisherTypeDescription ~ # 134	Puyl R Net	Puyallup R Net
-#       CatchAreaCode & FisherTypeDescription ~ # 137	Ar13 NetNT	Area 13 Non-Treaty Net (So Puget Sound)
-#       CatchAreaCode & FisherTypeDescription ~ # 138	Ar13 NetTR	Area 13 Treaty Net (So Puget Sound)
-#       CatchAreaCode & FisherTypeDescription ~ # 139	Ar13CNetNT	Area 13C Non-Treaty Net (Chambers Bay)
-#       CatchAreaCode & FisherTypeDescription ~ # 140	Ar13CNetTR	Area 13C Treaty Net (Chambers Bay)
-#       CatchAreaCode & FisherTypeDescription ~ # 141	Ar13ANetNT	Area 13A Non-Treaty Net (Carr Inlet)
-#       CatchAreaCode & FisherTypeDescription ~ # 142	Ar13ANetTR	Area 13A Treaty Net (Carr Inlet)
-#       CatchAreaCode & FisherTypeDescription ~ # 143	Ar13DNetNT	Area 13D Non-Treaty Net
-#       CatchAreaCode & FisherTypeDescription ~ # 144	Ar13DNetTR	Area 13D Treaty Net
-#       CatchAreaCode & FisherTypeDescription ~ # 145	A13FKNetNT	Area 13F-13K Non-Treaty Net
-#       CatchAreaCode & FisherTypeDescription ~ # 146	A13FKNetTR	Area 13F-13K Treaty Net
-#       CatchAreaCode & FisherTypeDescription ~ # 147	Nisq R Net	Nisqually R Net
-#       CatchAreaCode & FisherTypeDescription ~ # 148	McAlls Net	McAllister Creek Net
-#       CatchAreaCode & FisherTypeDescription ~ # 153	1212BNetNT	Area 12-12B Hood Canal Non-Treaty Net
-#       CatchAreaCode & FisherTypeDescription ~ # 154	1212BNetTR	Area 12-12B Hood Canal Treaty Net
-#       CatchAreaCode & FisherTypeDescription ~ # 155	A9-9ANetNT	Area 9/9A Non-Treaty Net
-#       CatchAreaCode & FisherTypeDescription ~ # 156	A9-9ANetTR	Area 9/9A Treaty Net (On Res)
-#       CatchAreaCode & FisherTypeDescription ~ # 157	Ar12ANetNT	Area 12A Non-Treaty Net (Quilcene Bay)
-#       CatchAreaCode & FisherTypeDescription ~ # 158	Ar12ANetTR	Area 12A Treaty Net (Quilcene Bay)
-#       CatchAreaCode & FisherTypeDescription ~ # 159	A12CDNetNT	Area 12C-12D Non-Treaty Net (SE Hood Canal)
-#       CatchAreaCode & FisherTypeDescription ~ # 160	A12CDNetTR	Area 12C-12D Treaty Net (SE Hood Canal)
-#       CatchAreaCode & FisherTypeDescription ~ # 161	Skok R Net	Skokomish R Net
-#       CatchAreaCode & FisherTypeDescription ~ # 162	Quilcn Net	Quilcene R Net
-#       
-#   )
-# )
 
 ```
 
@@ -789,10 +656,10 @@ rmis_rr <- rmis_rr |>
   # #do not see glaringly missing release_loc from PS, a few from WA coast and ColR
   # filter(is.na(StockID)) |> count(release_location_name, release_location_code) |> arrange(desc(n)) |> print(n=60)
   drop_na(StockID, PR_MU)
+```
 
-
-#reached overall OK agreement, some mismatches look related TS-included in summation
-rmis_rr |> 
+```{r data_in_cwt}
+data_in$cwt <- rmis_rr |> 
   inner_join(lu$fram_ca, by = "FisheryID") |> 
   drop_na(RRTermType) |> 
   filter(ts > 2) |> 
@@ -815,7 +682,13 @@ rmis_rr |>
       estimated_number
       )
     ,`345` = `3` + `4` + `5`
-  ) |> 
+  )
+```
+
+```{r comparing_rmis_rr_to_fram_pr_mu}
+#reached overall OK agreement, some mismatches look related TS-included in summation
+
+data_in$cwt |> 
   filter(year == 2020) |> 
   full_join(
     read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/RRTerm_Automated_DataInputs/CWT_Rec_4OldRRTerm_RegularTS_010422_20onlyrv.csv")
@@ -825,87 +698,155 @@ rmis_rr |>
   filter(abs(estimated_number - CWT_Est_Rec) > 1) |> 
   print(n=100)
 
-
 ```
 
 ## PEF calcs
 
-Basically appears to divide the total releases by the tagged, of marked?
+Divides the total releases by the tagged and marked.
 
 (cwt_1st/2nd_mark_count + non_cwt_1st/2nd_mark_count) / cwt_1st/2nd_mark_count
 
-MB calc for all releases ever, need to maintain that or okay to operate only on recovered mapped tags?
-
-Bigger question - appears to calc summaries on StockID/PR_MU rather than tag_code level...
-
 Confirmed with AHB that we want to build ratio from tagged+marked only, not including UM+tagged (as when cwt_2nd_mark==0000 and cwt_2nd_mark_count > 0)...because only examining marked recoveries (and tagged by def of being recovered).
 
+MB calc for all releases ever, need to maintain that or okay to operate only on recovered mapped tags?
 
-```{r pef}
+This first calcs per-tag_code total ("numerator") and marked+tagged ("denominator"), before then summing both per PR_MU to match MB code.
+
+
+```{r data_in_pef}
 # #MB filters on rel_age==2 (constructing 'Match4' obj)
 # Match2$rel_age = Match2$last_release_date_year - Match2$brood_year
 # #but then groups on Run_ID (corresponding to recovery/fishing year?)
 # Match4$Run_ID = (Match4$brood_year + 3)
 
 #already filtered to only marked cwt_1st (5000:6000)
-rmis_rr |> 
+data_in$pef <- rmis_rr |> 
   distinct(tag_code, .keep_all = T) |> 
   filter(last_release_date_year - brood_year == 2) |> #no effect in this test dataset
   mutate(
     Run_ID = brood_year + 3,
-    across(ends_with("_count"), ~replace_na(.,0))
-    ) |> 
-  #count(cwt_1st_mark, cwt_2nd_mark)
-#filter(Run_ID==2020, PR_MU=="1_4") |> select(PR_MU, tag_code, cwt_1st_mark:FisheryID)
-#filter(Run_ID==2020, PR_MU=="1_3") |> select(PR_MU, tag_code, cwt_1st_mark:FisheryID)
-  group_by(
-    Run_ID, StockID, PR_MU, tag_code
-    ) |> 
-  #mutate( 
-  summarise(
+    across(ends_with("_count"), ~replace_na(.,0)),
     rel_tot = cwt_1st_mark_count + cwt_2nd_mark_count + non_cwt_1st_mark_count + non_cwt_2nd_mark_count,
     rel_m_cwt_1st = if_else(between(as.integer(cwt_1st_mark), 5000, 6000), cwt_1st_mark_count, 0),
     rel_m_cwt_2nd = if_else(between(as.integer(cwt_2nd_mark), 5000, 6000), cwt_2nd_mark_count, 0),
-    across(starts_with("rel_m_cwt"), ~replace_na(.,0)),
-    pef = rel_tot / rel_m_cwt_1st + rel_m_cwt_2nd
-  ) |> 
-  filter(Run_ID==2020) |> 
+    across(starts_with("rel_m_cwt"), ~replace_na(.,0))
+    ) |> 
+  group_by(
+    year = Run_ID, StockID, PR_MU
+    #, tag_code
+    ) |> 
+  summarise(
+    across(starts_with("rel_"), sum),
+    pef = rel_tot / rel_m_cwt_1st + rel_m_cwt_2nd,
+    .groups = "drop"
+  ) 
+```
+
+```{r compare_data_in_pef}
+#small mismatches look due to excluding UM+tagged
+#large mismatches look due to missing large portion of release
+#likely need to start from "all_releases" rather than only from recovered tag_codes?
+
+data_in$pef |> 
+  filter(year==2020) |> 
   full_join(
     #object export with "_Num" and "_Den" fields
     read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/Data_ProcessingSteps/PEF_Method_Files/LocalPEF_Match5sum_010422.csv") |> 
-      filter(Run_ID == 2020) |> 
+      filter(Run_ID == 2020) |>
+      drop_na(Local_PEF) |> 
       select(Run_ID, StockID = FRAM_StockID, Local_PEF_Num:Local_PEF)
     ,
-    by = c("Run_ID", "StockID")
-  )
-
-
-#Access table format, all years...
-##read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/Data_ProcessingSteps/PEF_Method_Files/MU_Local_PEF_010422.csv") |> 
-read_csv("T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/MB_Draft_2020/RRTerm_Automated_DataInputs/MU_Local_PEF_010422rv.csv") |> 
-  filter(Run_ID == 2020)
-
-
+    by = c("year" = "Run_ID", "StockID")
+  ) |> 
+  left_join(
+    mb20$pef |> 
+      unite("PR_MU", PR_Number, PR_MU_Number) |> 
+      select(Run_ID, PR_MU, MU_Short_Name, Local_PEF_mdb = Local_PEF)
+    ,
+    by = c("Run_ID", "PR_MU")
+  ) |> 
+  print(n=50)
 
 ```
 
 # Run reconstruction 
 
-
-```{r}
-  #when full set of catches associated to CAs, then associate stock units per fishery/CA
-  inner_join(lu$ca_pr_mu, by = c("CA_Number", "CA_Short_Name")) |> 
-  #and then escp, tocas, etc.
-  inner_join(data_in$escp |> select(year, PR_MU, escp), by = c("year", "PR_MU")) |> 
-  group_by(year, FisheryID, CA_Number) |> 
+```{r revised_flow}
+hvst_cwt_pef_escp <- bind_rows(
+  data_in$crc_ca |> select(year, CA_Number:RRTermType, catch)
+  ,
+  data_in$tocas_ca |> select(year, CA_Number:RRTermType, catch)
+) |> 
+  filter(year == 2020) |> 
+  #join potential PR_MUs within CAs
+  left_join(lu$ca_pr_mu |> select(-CA_Short_Name), by = "CA_Number") |> 
+  #join CWT estimated number values
+  left_join(
+    data_in$cwt |> 
+      select(year, CA_Number, PR_MU, est_num = estimated_number)
+    ,
+    by = c("year", "CA_Number", "PR_MU")
+  ) |> 
+  #join PEFs
+  left_join(
+    data_in$pef |> 
+      select(year, PR_MU, pef)
+    ,
+    by = c("year", "PR_MU")
+  ) |> 
   mutate(
-    pct_escp = escp / sum(escp),
-    catchest_pct_escp = catchest * pct_escp
+    cwt_pef = est_num * pef
+  ) |> #filter(!is.na(cwt_pef)) |> print(n=100)
+  #join escapement estimates
+  left_join(
+    data_in$escp |> 
+      select(year, PR_MU, escp)
+    ,
+    by = c("year", "PR_MU")
+  ) |> 
+  arrange(year, CA_Number, PR_Number, PR_MU_Number)
+
+hvst_cwt_pef_escp |> 
+  #back join total CWT*PEF across MUs per CA
+  left_join(
+    hvst_cwt_pef_escp |> 
+      filter(CWT_Flag == 1) |> 
+      group_by(year, CA_Number) |> 
+      summarise(
+        cwt_pef_sum = sum(cwt_pef, na.rm = T),
+        .groups = "drop"
+        )
+    , 
+    by = c("year", "CA_Number")
+    ) |>
+  #deduct expanded CWT catch if exists
+  mutate(
+    catch_cwt_pef_sum = if_else(
+      is.na(cwt_pef_sum), 
+      catch, 
+      catch - cwt_pef_sum
+      )
+  ) |>
+#NEXT FINISH FROM HERE
+
+  #assign remainder by relative escapement abundance
+  group_by(year, CA_Number) |> 
+  mutate(
+    escp = if_else(is.na(HR_Flag), 0, escp),
+    escp = if_else(!is.na(CWT_Flag) & CWT_Flag == 1, 0, escp),
+    
+    pr_mu_pct = escp / sum(escp, na.rm = T),
+    catch_pct = catch_cwt_pef_sum * pr_mu_pct,
+    catch_final = if_else(
+      !is.na(Flag_cwt) & Flag_cwt == 1,
+      cwt_pef,
+      catch_pct
+      )
     ) |> 
-  group_by(year, PR_MU, MU_Short_Name) |> 
-  summarise(escp = first(escp), crc = sum(catchest_pct_escp), .groups = "drop")
+  ungroup() 
 
 ```
+
 
 
 to set up first deducting CWT*PEF then splitting remainder by escp_pct

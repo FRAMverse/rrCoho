@@ -354,38 +354,38 @@ CA_Number,PR_Number,PR_MU_Number,CA_Short_Name,PR_Short_Name,MU_Short_Name,HR_Fl
 552,1,8,Samh R Spt,NOOKSM,whatch,NA,1_8
 561,2,1,Area 8 Net,SKAGIT,skagtw,1,2_1
 561,2,2,Area 8 Net,SKAGIT,skagth,1,2_2
-561,2,3,Area 8 Net,SKAGIT,skgbkh,1,2_3
-561,2,4,Area 8 Net,SKAGIT,skgbkw,1,2_4
+561,2,3,Area 8 Net,SKAGIT,skgbkw,1,2_3
+561,2,4,Area 8 Net,SKAGIT,skgbkh,1,2_4
 561,2,5,Area 8 Net,SKAGIT,swinch,1,2_5
 561,2,6,Area 8 Net,SKAGIT,oakhbh,1,2_6
 563,2,1,Skag R Net,SKAGIT,skagtw,1,2_1
 563,2,2,Skag R Net,SKAGIT,skagth,1,2_2
-563,2,3,Skag R Net,SKAGIT,skgbkh,1,2_3
-563,2,4,Skag R Net,SKAGIT,skgbkw,1,2_4
+563,2,3,Skag R Net,SKAGIT,skgbkw,1,2_3
+563,2,4,Skag R Net,SKAGIT,skgbkh,1,2_4
 563,2,5,Skag R Net,SKAGIT,swinch,1,2_5
 563,2,6,Skag R Net,SKAGIT,oakhbh,1,2_6
 566,2,1,SkgR TsNet,SKAGIT,skagtw,1,2_1
 566,2,2,SkgR TsNet,SKAGIT,skagth,1,2_2
-566,2,3,SkgR TsNet,SKAGIT,skgbkh,1,2_3
-566,2,4,SkgR TsNet,SKAGIT,skgbkw,1,2_4
+566,2,3,SkgR TsNet,SKAGIT,skgbkw,1,2_3
+566,2,4,SkgR TsNet,SKAGIT,skgbkh,1,2_4
 566,2,5,SkgR TsNet,SKAGIT,swinch,1,2_5
 566,2,6,SkgR TsNet,SKAGIT,oakhbh,1,2_6
 569,2,1,SwinCh Net,SKAGIT,skagtw,NA,2_1
 569,2,2,SwinCh Net,SKAGIT,skagth,NA,2_2
-569,2,3,SwinCh Net,SKAGIT,skgbkh,NA,2_3
-569,2,4,SwinCh Net,SKAGIT,skgbkw,NA,2_4
+569,2,3,SwinCh Net,SKAGIT,skgbkw,NA,2_3
+569,2,4,SwinCh Net,SKAGIT,skgbkh,NA,2_4
 569,2,5,SwinCh Net,SKAGIT,swinch,1,2_5
 569,2,6,SwinCh Net,SKAGIT,oakhbh,1,2_6
 572,2,1,Ar 8-1 Spt,SKAGIT,skagtw,1,2_1
 572,2,2,Ar 8-1 Spt,SKAGIT,skagth,1,2_2
-572,2,3,Ar 8-1 Spt,SKAGIT,skgbkh,1,2_3
-572,2,4,Ar 8-1 Spt,SKAGIT,skgbkw,1,2_4
+572,2,3,Ar 8-1 Spt,SKAGIT,skgbkw,1,2_3
+572,2,4,Ar 8-1 Spt,SKAGIT,skgbkh,1,2_4
 572,2,5,Ar 8-1 Spt,SKAGIT,swinch,1,2_5
 572,2,6,Ar 8-1 Spt,SKAGIT,oakhbh,1,2_6
 575,2,1,Skag R Spt,SKAGIT,skagtw,1,2_1
 575,2,2,Skag R Spt,SKAGIT,skagth,1,2_2
-575,2,3,Skag R Spt,SKAGIT,skgbkh,1,2_3
-575,2,4,Skag R Spt,SKAGIT,skgbkw,1,2_4
+575,2,3,Skag R Spt,SKAGIT,skgbkw,1,2_3
+575,2,4,Skag R Spt,SKAGIT,skgbkh,1,2_4
 575,2,5,Skag R Spt,SKAGIT,swinch,NA,2_5
 575,2,6,Skag R Spt,SKAGIT,oakhbh,NA,2_6
 581,3,1,Ar 8A Net,STILSN,stillw,1,3_1
@@ -1114,10 +1114,10 @@ CA_Number,PR_Number,PR_MU_Number,CA_Short_Name,PR_Short_Name,MU_Short_Name,HR_Fl
 683,5,4,13D-K TSpt,SPGSND,nisqlh,NA,5_4
 683,5,5,13D-K TSpt,SPGSND,nisqlw,NA,5_5
 683,5,6,13D-K TSpt,SPGSND,foxish,NA,5_6
-683,5,7,13D-K TSpt,SPGSND,mintch,NA,5_7
+683,5,7,13D-K TSpt,SPGSND,mintch,1,5_7
 683,5,8,13D-K TSpt,SPGSND,ar13mw,NA,5_8
 683,5,9,13D-K TSpt,SPGSND,chambh,NA,5_9
-683,5,10,13D-K TSpt,SPGSND,ar13mh,NA,5_10
+683,5,10,13D-K TSpt,SPGSND,ar13mh,1,5_10
 683,5,11,13D-K TSpt,SPGSND,ar13aw,NA,5_11
 683,5,12,13D-K TSpt,SPGSND,puyalh,NA,5_12
 683,5,13,13D-K TSpt,SPGSND,puyalw,NA,5_13
@@ -1329,7 +1329,7 @@ CA_Number,PR_Number,PR_MU_Number,CA_Short_Name,PR_Short_Name,MU_Short_Name,HR_Fl
 881,25,1,BCCNTL TTR,BCCNTL,bccnhw,1,25_1
 882,26,1,BCNCST TTR,BCNCST,bcnchw,1,26_1
 883,27,1,QUEENC TTR,QUEENC,quenhw,1,27_1
-884,28,1,"NASSRV TTR","NASSRV",nasshw,1,28_1
+884,28,1,NASSRV TTR,NASSRV,nasshw,1,28_1
 885,29,1,SKEENA TTR,SKEENA,skeehw,1,29_1
 981,30,1,TRANAC TTR,TRANAC,tranhw,1,30_1
 982,31,1,NIASKA TTR,NIASKA,niakhw,1,31_1
