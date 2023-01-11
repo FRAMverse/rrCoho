@@ -518,6 +518,17 @@ data_in$tocas_ca |>
 
 ```
 
+## combine
+
+```{r data_in_catch}
+data_in$catch <- bind_rows(
+  data_in$crc_ca |> select(year, CA_Number:RRTermType, catch)
+  ,
+  data_in$tocas_ca |> select(year, CA_Number:RRTermType, catch)
+)
+
+```
+
 
 # CWTs
 
@@ -842,26 +853,150 @@ data_in$pef |>
 
 # Run reconstruction 
 
- 1. combine the catch datasets, mapped to RRterm CAs from FRAM FisheryIDs via LU
- 2. join the CA_PR_MU LU that defines which stock/PR_MUs are potentially assigned withn a fishery
- 3. join the CWT recoveries mapped to stock-fishery (PR_MU and CA)
- 4. join the PEFs per PR_MU
- 5. calc the PEF*CWTestnum value (with many NAs for PR_MUs missing one or both values)
- 6. join the escapement estimates
+## PR 1
 
 ```{r}
-#PR_MU 5_24 SPGSND foxicc has no compiled escapement and is excluded by inner_join
-#as is any other unit with no escapement in current escapement compilation
-#could certainly drop_na(HR_Flag) now rather than later
-#same for filter PR_Number 1-6
-escp_hvst_cwt_pef <- full_join(
-  lu$ca_pr_mu #|> drop_na(HR_Flag) |> filter(PR_Number < 7)
-  ,
-  data_in$escp |> select(year, PR_MU, escp) |> 
-    filter(year == 2020)
-  ,
-  by = "PR_MU"
+#not starting from escp_hvst_cwt_pef
+pr_num <- 1
+
+#potential PR_MUs in relevant CAs
+pr_ca_mu <- lu$ca_pr_mu |> 
+  filter(HR_Flag == 1, PR_Number == pr_num) |> 
+  select(CA_Number, CA_Short_Name, PR_MU, MU_Short_Name)
+
+#order of fisheries to evaluate
+ca_seq <- sort(unique(pr_ca_mu$CA_Number), decreasing = T)
+
+pr_catch <- data_in$catch |> 
+  select(year, CA_Number, CWT_Flag, catch) |> 
+  semi_join(pr_ca_mu, by = c("CA_Number")) 
+
+pr_cwt_pef <- data_in$cwt |> 
+  select(year, CA_Number, PR_MU, est_num = estimated_number) |> 
+  semi_join(pr_ca_mu, by = c("CA_Number", "PR_MU")) |> 
+  left_join(data_in$pef |> select(year, PR_MU, pef_adcwt), by = c("year", "PR_MU")) |> 
+  mutate(cwt_pef = est_num * pef_adcwt) |> 
+##for 2020 testing in PR1, to avoid negative MB notes show she simply set Lummi P flag to 0
+  mutate(
+    cwt_pef = if_else(CA_Number == 531 & PR_MU == "1_4", 0, cwt_pef)
+  ) 
+
+pr_catch_less_cwt <- pr_catch |> #filter(year==2020)
+  inner_join(
+    pr_cwt_pef |> select(year, CA_Number, PR_MU, cwt_pef),
+    by = c("year", "CA_Number")
+  ) |> 
+  filter(CWT_Flag > 0) |> 
+  group_by(year, CA_Number) |> 
+  summarise(catch_less_cwt = catch[1] - sum(cwt_pef), .groups = 'drop') 
+
+pr_escp <- data_in$escp |> 
+  select(year, PR_MU, escp) |> 
+  semi_join(pr_ca_mu, by = c("PR_MU"))
+
+
+
+#begin run size as escapement
+pr_run_size <- pr_escp |> 
+  rename(rs = escp) |> 
+  mutate(rs = as.numeric(rs))
+
+#first fishery/CA outside of for-loop
+pr_temp <- pr_ca_mu |> 
+    filter(CA_Number == ca_seq[1]) |> 
+    left_join(pr_run_size, by = c("PR_MU")) |> 
+    left_join(pr_catch, by = c("year", "CA_Number")) |> 
+    left_join(pr_cwt_pef |> select(year, CA_Number, PR_MU, cwt_pef), by = c("year", "CA_Number", "PR_MU")) |> 
+    left_join(pr_catch_less_cwt, by = c("year", "CA_Number")) |> 
+    group_by(year) |> 
+    mutate(
+      rs_tot = sum(rs[is.na(cwt_pef)]),
+      rs_pct = if_else(is.na(cwt_pef), rs / rs_tot, 0),
+      catch_less_cwt = if_else(is.na(catch_less_cwt), catch, catch_less_cwt),
+      catch_pr_mu = if_else(
+        is.na(cwt_pef),
+        catch_less_cwt * rs_pct,
+        cwt_pef
+      ),
+      # catch_pr_mu = if_else(
+      #   is.na(cwt_pef),
+      #   catch * rs_pct,
+      #   cwt_pef
+      # ),
+      rs = rs + catch_pr_mu
+    ) |> 
+  ungroup()
+
+pr_run_size <- pr_run_size |>
+  rows_upsert(
+    pr_temp |> select(year, PR_MU, rs)
+    ,
+    by = c("year", "PR_MU")
+    )
+
+pr_out <- pr_temp |> select(CA_Number:year, catch_pr_mu)
+
+#now process remaining fisheries/CAs
+#using starting run size as either escapement or that calc'd from previous fishery
+#and splitting catch-less-CWT by relative proportions of those MUs without cwt-based catch
+for (ca in ca_seq[-1]) {
+  pr_temp <- pr_ca_mu |> 
+    filter(CA_Number == ca) |> 
+    left_join(pr_run_size, by = c("PR_MU")) |> 
+    left_join(pr_catch, by = c("year", "CA_Number")) |> 
+    left_join(pr_cwt_pef |> select(year, CA_Number, PR_MU, cwt_pef), by = c("year", "CA_Number", "PR_MU")) |> 
+    left_join(pr_catch_less_cwt, by = c("year", "CA_Number")) |> #filter(year==2020)
+    group_by(year) |> 
+    mutate(
+      rs_tot = sum(rs[is.na(cwt_pef)]),
+      rs_pct = if_else(is.na(cwt_pef), rs / rs_tot, 0),
+      catch_less_cwt = if_else(is.na(catch_less_cwt), catch, catch_less_cwt),
+      catch_pr_mu = if_else(
+        is.na(cwt_pef),
+        catch_less_cwt * rs_pct,
+        cwt_pef
+      ),
+      rs = rs + catch_pr_mu
+    ) |> 
+    ungroup()
+  
+pr_run_size <- pr_run_size |> 
+  rows_upsert(
+    pr_temp |> select(year, PR_MU, rs)
+    ,
+    by = c("year", "PR_MU")
+    )
+
+pr_out <- bind_rows(
+  pr_out,
+  pr_temp |> select(CA_Number:year, catch_pr_mu)
+)
+
+}
+
+
+```
+
+
+
+```{r escp_hvst_cwt_pef}
+#per AHB, replicating past practice
+#only considering HR_Flag==1 and PR 1:6
+#so, filtering at outset after examining equivalent effect of later
+#but PR_MU 5_24 SPGSND foxicc is example of potential consideration
+#PR_MU allowed in CA is excluded when no escapement compiled
+
+escp_hvst_cwt_pef <- lu$ca_pr_mu |> 
+  full_join(
+    data_in$escp |> 
+      select(year, PR_MU, escp)
+    ,
+    by = "PR_MU"
   ) |>
+  drop_na(HR_Flag) |> 
+  filter(PR_Number < 7) |> 
+#!!dev/testing
+filter(year == 2020) |> 
   #add catches
 #!!Will want to have dropped CWT_Flag from lu_FRAM_CA.csv
 #!!but leaving for now to allow checks of 2020
@@ -906,20 +1041,25 @@ escp_hvst_cwt_pef <- full_join(
 
 ```
 
-```{r}
-escp_hvst_cwt_pef |> 
-  filter(
-    HR_Flag == 1,
-    PR_Number < 7
-    ) |> 
-  split(~PR_Number)
+vector of included sport fisheries, designated by river or not
+move this into the `lu$fram_ca`?
 
+```{r ca_spt}
+ca_spt <- lu$ca_pr_mu |> 
+  filter(PR_Number < 7, str_detect(CA_Short_Name, "pt$")) |> 
+  distinct(CA_Number, CA_Short_Name) |> 
+  mutate(river = if_else(str_detect(CA_Short_Name, "R Spt$"), T, F))
 ```
 
 
-
-
 OLDER
+
+ 1. combine the catch datasets, mapped to RRterm CAs from FRAM FisheryIDs via LU
+ 2. join the CA_PR_MU LU that defines which stock/PR_MUs are potentially assigned withn a fishery
+ 3. join the CWT recoveries mapped to stock-fishery (PR_MU and CA)
+ 4. join the PEFs per PR_MU
+ 5. calc the PEF*CWTestnum value (with many NAs for PR_MUs missing one or both values)
+ 6. join the escapement estimates
 
 ```{r initiate_hvst_cwt_pef_escp}
 hvst_cwt_pef_escp <- bind_rows(
