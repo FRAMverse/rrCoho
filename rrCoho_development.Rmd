@@ -6,6 +6,8 @@ params:
   file_path_escp: "copy_of_fram_coho_escapement_2022.xlsx"
   file_path_crc: "T:/DFW-Salmon Mgmt Modeling Team - General/Catch datasets/CRC/Sport Harvest Estimates 20221116.mdb"
   file_path_tocas: "T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/tocas_coho_2000-present.csv"
+  file_path_rmis_rec_rel: "mb20$cwt_raw"
+  file_path_rmis_all_rel: "rmis_releases_all_coho_by2010_onward.csv"
 editor_options: 
   chunk_output_type: console
 output: 
