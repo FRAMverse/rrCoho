@@ -1,0 +1,665 @@
+---
+title: "rrCoho overview"
+author: "Dan.Auerbach@dfw.wa.gov"
+date: "`r Sys.Date()`"
+editor_options: 
+  chunk_output_type: console
+output: 
+  bookdown::html_document2:
+    self_contained: true
+    fig_caption: yes
+    theme: flatly
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, results = FALSE, warning = FALSE, message = FALSE, fig.width = 9, fig.height = 9)
+
+library("tidyverse")
+library("gt")
+
+if(grepl("apple", sessionInfo()$platform)){
+  file_path <- list(
+    escp = "~/T/DFW-Salmon Mgmt Modeling Team - General/Escapement files/Coho/fram_coho_escapement_2023.xlsx",
+    crc_mdb = "~/T/DFW-Salmon Mgmt Modeling Team - General/Catch datasets/CRC/Sport Harvest Estimates 20221116.mdb",
+    tocas = "~/T/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/2021/tocas_coho_2000-present.csv",
+    rmis_rec = "~/T/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/2021/rmis_recs_2019_2022.csv",
+    rmis_all_rel = "~/T/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/2021/rmis_releases_all_coho_by2010_onward.csv",
+    lu_xlsx = "~/O/code/framr/xlsx/lu_coho.xlsx"
+  )
+} else {
+  file_path <-   list(
+    escp = "T:/DFW-Salmon Mgmt Modeling Team - General/Escapement files/Coho/fram_coho_escapement_2023.xlsx",
+    crc_mdb = "T:/DFW-Salmon Mgmt Modeling Team - General/Catch datasets/CRC/Sport Harvest Estimates 20221116.mdb",
+    tocas = "T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/2021/tocas_coho_2000-present.csv",
+    rmis_rec = "T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/2021/rmis_recs_2019_2022.csv",
+    rmis_all_rel = "T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/2021/rmis_releases_all_coho_by2010_onward.csv",
+    lu_xlsx = "O:/code/framr/xlsx/lu_coho.xlsx"
+  )
+}
+
+
+#fixed lookups from CRC, TOCAS, and RMIS to FRAM FisheryID and RMIS to PR_MU/StockID
+lu <- map(
+  set_names(readxl::excel_sheets(file_path$lu_xlsx))
+  ,
+  ~readxl::read_excel(file_path$lu_xlsx, sheet = .x)
+  )
+lu$crc_fram <- lu$crc_fram |> mutate(across(starts_with('FisheryID'), as.integer))
+lu$tocas_fram <- lu$tocas_fram |> mutate(across(starts_with('FisheryID'), as.integer))
+
+#ANNUAL lookup/flagging for allowed PR_MUs in CAs
+#and whether to use CWTs
+lu$ca_pr_mu_flagged <- readxl::read_excel("ca_pr_mu_flagged.xlsx")
+
+data_in <- list()
+rr <- list()
+
+```
+
+https://fisheriesservices.nwifc.org/fram-model-runs/preseason-fram-model-preparation/salmon-run-reconstruction-puget-sound/
+
+# Escapement
+
+ - expects/relies on current format of *fram_coho_escapement_YEAR.xlsx* file
+ - reads 'dataset' sheet and wrangles to 'RRTerm' summarization by PR + PR_MU
+ - replacement needs to maintain PR & PR_MU fields per escapement estimate value
+
+```{r read_escp}
+data_in$escp <- readxl::read_excel(
+  path = file_path$escp,
+  sheet = "dataset"
+)|> 
+  group_by(year, RRTerm_PR, RRTerm_PR_MU) |> 
+  summarise(escp = sum(escp_val, na.rm = T), .groups = "drop") |> 
+  mutate(
+    PR_MU = paste(RRTerm_PR, RRTerm_PR_MU, sep = "_"),
+    across(c(year, escp), as.integer)
+    )
+```
+
+# Catches
+
+## Recreational: CRC
+
+Refactored from *CohoFRAM_PostSeasonwMZ_RR_SportFisheryInputs_111021.R*
+  - Persisted removal of AreaCode == 192
+  - Persisted Timestep based on `catchstatmonth` ignoring start/end dates outside single month
+  - Persisted CRC~FRAM LU assignment in `framr`-based LU
+  - Then assigns RRTerm CA from FRAM FisheryID
+  - Catches only summed from FRAM timestep 3+4+5 FW or 4+5 Marine (Aug+Sep+Oct-Nov).
+
+```{r read_crc_coho_osx}
+data_in$crc <- dplyr::left_join(
+  system2("mdb-export", args = paste(str_replace_all(file_path$crc_mdb, " ", "\\\\ "), "Catch"), stdout = T) |> I() |> readr::read_csv()
+  ,
+  system2("mdb-export", args = paste(str_replace_all(file_path$crc_mdb, " ", "\\\\ "), "Area"), stdout = T) |> I() |> readr::read_csv()
+  ,
+  by = "AreaID") |> 
+  dplyr::rename_with(.fn = tolower) |> 
+  filter(species == "Coho", areacode != "192") |>
+  mutate(
+    area_code = str_pad(areacode, width = 2, pad = "0"),
+    dplyr::across(ends_with("date"), ~as.Date(., format = "%m/%d/%y")),
+    catchstatmonth = if_else(is.na(catchstatmonth), as.integer(format(catchperiodstartdate, '%m')), as.integer(catchstatmonth))
+    ) |>
+  group_by(area_code, areaname, year = catchyear, catchstatmonth) |> 
+  summarise(catchest = sum(catchest), .groups = "drop") |> 
+  mutate(
+    m = factor(month.abb[catchstatmonth], levels = month.abb),
+    ts = case_when(
+      m %in% month.abb[1:6] ~ 1,
+      m == "Jul" ~ 2,
+      m == "Aug" ~ 3,
+      m == "Sep" ~ 4,
+      m %in% month.abb[10:12] ~ 5)
+    )
+```
+
+```{r read_crc_coho, eval=FALSE}
+db_con <- DBI::dbConnect(
+  drv = odbc::odbc(),
+  .connection_string = paste0(
+    "Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=",
+    file_path$crc_mdb,
+    ";"))
+
+data_in$crc <- dplyr::left_join(
+  dplyr::collect(dplyr::tbl(db_con, "Catch")) |> 
+    dplyr::mutate(dplyr::across(ends_with("Date"), ~as.Date(., format = "%m/%d/%Y"))) 
+  , 
+  dplyr::collect(dplyr::tbl(db_con, "Area"))
+  ,
+  by = "AreaID") |> 
+  dplyr::rename_with(.fn = tolower) |> 
+  filter(species == "Coho", areacode != "192") |> 
+  mutate(
+    area_code = str_pad(areacode, width = 2, pad = "0"),
+    catchstatmonth = if_else(is.na(catchstatmonth), as.integer(format(catchperiodstartdate, '%m')), catchstatmonth)
+    ) |>
+  group_by(area_code, areaname, year = catchyear, catchstatmonth) |> 
+  summarise(catchest = sum(catchest), .groups = "drop") |> 
+  mutate(
+    m = factor(month.abb[catchstatmonth], levels = month.abb),
+    ts = case_when(
+      m %in% month.abb[1:6] ~ 1,
+      m == "Jul" ~ 2,
+      m == "Aug" ~ 3,
+      m == "Sep" ~ 4,
+      m %in% month.abb[10:12] ~ 5)
+    )
+
+DBI::dbDisconnect(db_con)
+
+```
+
+```{r data_in_crc_ca}
+#maintaining FW 3+4+5, M 4+5 per AHB, but would prefer not to exclude pre-Aug catch on basis of 'dip in' concerns
+#no idea how CWT_Flag, Cat_Flag, Type_Calc are used
+data_in$crc_ca <- data_in$crc |> 
+  left_join(select(lu$crc_fram, -FisheryID_alt), by = "area_code") |> 
+  drop_na(FisheryID) |> 
+  inner_join(lu$fram_ca, by = "FisheryID") |> 
+  drop_na(RRTermType) |> 
+  filter(ts > 2) |> 
+  group_by(year, CA_Number, CA_Short_Name, RRTermType, ts) |> 
+  summarise(catchest = sum(catchest), .groups = "drop") |> 
+  pivot_wider(names_from = ts, values_from = catchest, values_fill = 0) |> 
+  mutate(
+    catch = case_when(
+      RRTermType == "FW" ~ `3` + `4` + `5`,
+      RRTermType == "M" ~ `4` + `5`
+    )
+  )
+```
+
+## Commercial: TOCAS
+
+Refactored from *CohoFRAM_PostSeason_RR_CommCatchInputs_MB121621*
+
+>TO QUERY RAW DATA (http://access.nwifc.org/webapps/index.asp)
+>Biological Reports
+>TOCAS/WAFT
+>Breaks: SpeciesName, Fishery, Gear, GearName, Catch Area, Disposition, Landing Date, Tribe Name.
+>Select - TOCAS Filled with WAFT Data
+>Values:  Select - Units
+>Criteria:
+> Species Selected =  
+> 004 - COHO
+> 044 - COHO AQUACULTURE (Note: no results, but keep in query to see if any show-up....)
+> (Do not include 874 - COHO EGGS)
+> Tribes Selected = ALL
+> Gears Selected = ALL
+> Areas Selected = ALL
+> Disposition Selected = ALL
+> Dealers Selected = ALL
+> Modify dates as needed
+
+```{r read_tocas}
+data_in$tocas <- read_csv(file_path$tocas) |> 
+  filter(Disposition %in% c("C&SF", "COMM", "ORGN", "TEST","TKHM")) |> 
+  mutate(
+    landing_date = as.Date(Landing_Date, format = "%m/%d/%Y"),
+    month = lubridate::month(landing_date),
+    year = lubridate::year(landing_date),
+    ts = case_when(
+      month %in% 1:6 ~ 1,
+      month == 7 ~ 2,
+      month == 8 ~ 3,
+      month == 9 ~ 4,
+      month %in% 10:12 ~ 5)
+  )
+```
+
+```{r data_in_tocas_ca}
+data_in$tocas_ca <- data_in$tocas |> 
+  group_by(year, ts, Fishery, TribeName, Gear, Disposition, Catch_Area) |> 
+  summarise(catch = sum(Units), .groups = "drop") |> 
+  mutate(TribeName = if_else(TribeName %in% c("QUINAULT - 18", "CHEHALIS - 02"), TribeName, NA_character_)) |> 
+  left_join(
+    lu$tocas_fram |> separate_rows(Disposition) |> separate_rows(Gear) |> mutate(Gear = as.integer(Gear)),
+    by = c("Fishery", "TribeName", "Gear", "Disposition", "Catch_Area")
+  ) |> 
+  drop_na(FisheryID) |> 
+  inner_join(lu$fram_ca, by = "FisheryID") |> 
+  drop_na(RRTermType) |> 
+  filter(ts > 2) |> 
+  group_by(year, CA_Number, CA_Short_Name, RRTermType, ts) |> 
+  summarise(catch = sum(catch), .groups = "drop") |> 
+  arrange(year, CA_Number, ts) |> 
+  pivot_wider(names_from = ts, values_from = catch, values_fill = 0) |> 
+  mutate(
+    catch = case_when(
+      RRTermType == "FW" ~ `3` + `4` + `5`,
+      RRTermType == "M" ~ `4` + `5`
+    )
+  )
+```
+
+## combine
+
+```{r data_in_catch}
+data_in$catch <- bind_rows(
+  data_in$crc_ca |> select(year, CA_Number, CA_Short_Name, RRTermType, catch),
+  data_in$tocas_ca |> select(year, CA_Number, CA_Short_Name, RRTermType, catch)
+)
+```
+
+
+# CWT recoveries
+
+Refactored from MB scripts & SFund fishery & stock mapping
+
+  - *CohoRR_CWT_PostProcess_FisheryMethod_MB121621* assigning recoveries to FRAM fisheries
+  - *CohoRR_CWT_PostProcess_StockMethod_PEFCalcs_CWTForecast_MB010322_SEFMethod* assigning post-fishery wrangled recoveries to stocks and calc PEFs
+
+MB escapement separating out C&S, so `fishery %in% c(50:54,57:59)`, excluding RMIS 55 & 56
+
+Query from 'recoveries by tag code' (https://www.rmis.org/cgi-bin/queryfrm.mpl?Table=recoveriesbytagcode&tag_status=1&Version=4.1)
+Tag Status == 1, Species == 2 (coho), Recovery Year = ...
+User list of fields to paste into "User List" popup:
+> sample_type, brood_year, tag_code, recovery_date, recovery_location_code, fishery, gear, estimated_number
+
+```{r rmis_rec_rel}
+# readr::read_csv("https://www.rmis.org/reports/CSV18307.txt") |>
+#   write_csv("~/T/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/2021/rmis_recs_2019_2022.csv")
+
+rmis_rec_rel <- left_join(
+  read_csv(file_path$rmis_rec) |> 
+    filter(
+      sample_type != 5,
+      (fishery < 50 | fishery %in% 55:56 | fishery > 59)
+    )
+  ,
+  read_csv(file_path$rmis_all_rel) |> 
+    select(
+      tag_code = tag_code_or_release_id,
+      brood_year, last_release_date,
+      hatchery_location_name,
+      stock_location_name,
+      rearing_type,
+      release_location_code, release_location_name, 
+      cwt_1st_mark, #cwt_1st_mark_count, 
+      cwt_2nd_mark, #cwt_2nd_mark_count, 
+      non_cwt_1st_mark, #non_cwt_1st_mark_count, 
+      non_cwt_2nd_mark #, non_cwt_2nd_mark_count
+    )
+  ,
+  by = c("tag_code", "brood_year")
+  ) |> 
+  mutate(
+    rec_date = as.Date(as.character(recovery_date), format = "%Y%m%d"),
+    rec_year = lubridate::year(rec_date), 
+    rec_year = if_else(is.na(rec_year) & nchar(as.character(recovery_date)) == 4,
+                       as.integer(recovery_date),
+                       as.integer(rec_year)),
+    rec_month = lubridate::month(rec_date),
+    rec_age = rec_year - brood_year,
+    ts = case_when(
+      rec_month %in% 1:6 ~ 1,
+      rec_month == 7 ~ 2,
+      rec_month == 8 ~ 3,
+      rec_month == 9 ~ 4,
+      rec_month %in% 10:12 ~ 5),
+    fishery_single = floor(fishery/10)
+  ) |> 
+  tibble::rowid_to_column("uid") 
+```
+
+```{r rmis_to_fram_fish}
+#first declare temp object of only key fields
+rmis_rec_rel_to_map <- select(.data = rmis_rec_rel, uid, recovery_location_code, fishery_single)
+
+#now overwrite as split-then-bind pattern on Num_Chars
+#per AHB request, added explicit right string padding to specified string length
+#even when actual strings in RMIS and LU are/use fewer char
+rmis_rec_rel_to_map <- map_df(
+  sort(unique(lu$rmis_fram_fishery$Num_Chars)),
+  ~inner_join(
+    rmis_rec_rel_to_map |> 
+      mutate(
+        PSC_Code = str_sub(recovery_location_code, 1, .x) |> 
+          str_pad(width = .x, side = "right")
+        )
+    ,
+    lu$rmis_fram_fishery |> 
+      filter(Num_Chars == .x) |> 
+      mutate(
+        PSC_Code = str_pad(PSC_Code, width = .x, side = "right")
+        )
+    ,
+    by = c("PSC_Code", "fishery_single")
+  )
+)
+
+#now rejoin to full dataset, after making FisheryID distinct per UID
+rmis_rec_rel <- left_join(
+  rmis_rec_rel, 
+  #split out any multiple-mapped, make distinct per UID and rebind
+  bind_rows(
+    #records that map to a single fishery
+    anti_join(
+      rmis_rec_rel_to_map
+      ,
+      rmis_rec_rel_to_map |> count(uid) |> filter(n>1) |> select(uid)
+      , by = "uid"
+      ) |> 
+      select(uid, FisheryID)
+    ,
+    #MAY BE 0 ROWS records that map to multiple fisheries
+    semi_join(
+      rmis_rec_rel_to_map
+      ,
+      rmis_rec_rel_to_map |> count(uid) |> filter(n>1) |> select(uid)
+      ,
+      by = "uid"
+      ) |> 
+      group_by(uid) |> 
+      slice_max(Num_Chars, n = 1, with_ties = F) |> 
+      ungroup() |> 
+      select(uid, FisheryID)
+  )
+  ,
+  by = "uid"
+  )
+
+rm(rmis_rec_rel_to_map)
+
+# #unmapped recoveries
+# rmis_rec_rel |> filter(is.na(FisheryID)) |> count(recovery_location_code) |> print(n=100)
+# #bad dates Indy 
+# rmis_rec_rel |> filter(is.na(rec_date)) |> count(recovery_location_code) |> print(n=100)
+
+```
+
+Now assign FRAM StockID, limiting to marked, age 3, rearing type H or M
+
+```{r rmis_rec_rel_to_fram_pr_mu}
+rmis_rec_rel <- rmis_rec_rel |> 
+  drop_na(FisheryID, rec_date, estimated_number) |> 
+  filter(
+    rec_age == 3,
+    between(as.integer(cwt_1st_mark), 5000, 6000),
+    rearing_type %in% c("H","M")
+    ) |>
+  left_join(lu$rmis_fram_pr_mu, by = "release_location_name") |> 
+  drop_na(StockID, PR_MU)
+```
+
+```{r data_in_cwt}
+data_in$cwt <- rmis_rec_rel |> 
+  inner_join(lu$fram_ca, by = "FisheryID") |> 
+  drop_na(RRTermType) |> 
+  filter(ts > 2) |> 
+  group_by(
+    year = rec_year, ts,
+    CA_Number, CA_Short_Name, RRTermType,
+    PR_Number, PR_MU_Number, PR_MU, MU_Short_Name) |> 
+  summarise(est_num = sum(estimated_number), .groups = "drop") |> 
+  arrange(year, CA_Number, ts) |> 
+  pivot_wider(names_from = ts, values_from = est_num, values_fill = 0) |> 
+  mutate(
+    est_num = case_when(
+      RRTermType == "FW" ~ `3` + `4` + `5`,
+      RRTermType == "M" ~ `4` + `5`
+    ),
+    #MB has HC fisheries as all 3+4+5
+    est_num = if_else(
+      between(CA_Number, 700, 756),
+      `3` + `4` + `5`,
+      est_num
+      )
+    ,`345` = `3` + `4` + `5`
+  )
+```
+
+# PEF calcs
+
+Divides the total releases by the tagged and marked.
+
+(cwt_1st/2nd_mark_count + non_cwt_1st/2nd_mark_count) / cwt_1st/2nd_mark_count
+
+Confirmed with AHB that we want to build ratio from tagged+marked only, not including UM+tagged (as when cwt_2nd_mark==0000 and cwt_2nd_mark_count > 0)...because only examining marked recoveries (and tagged by def of being recovered).
+
+This first calcs per-tag_code total ("numerator") and marked+tagged ("denominator"), before then summing both per PR_MU to match MB code.
+
+```{r rmis_rel_all}
+# # #reran 2010-onward all releases
+# # WHERE species = '2'
+# # AND   brood_year IN (2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022)
+# rmis_rel_all <- readr::read_csv("https://www.rmis.org/reports/CSV1607.txt") 
+# readr::write_csv(rmis_rel_all, "rmis_releases_all_coho_by2010_onward.csv")
+
+rmis_rel_all <- readr::read_csv(file_path$rmis_all_rel) |> 
+  mutate(
+    last_release_date_year = lubridate::year(as.Date(as.character(last_release_date), format = "%Y%m%d")),
+    last_release_date_year = if_else(
+      is.na(last_release_date_year) & nchar(as.character(last_release_date)) == 4,
+      as.integer(last_release_date),
+      as.integer(last_release_date_year))
+  ) |> 
+  # #this creates some NAs for dates of format YYYYMM, but these appear to be "!nnn..." codes for non-tagged groups except for 211071 which is totally uninformative
+  # filter(is.na(last_release_date_year)) |> count(str_sub(tag_code_or_release_id, 1,2))
+  select(
+    tag_code = tag_code_or_release_id, 
+    related_group_id,
+    brood_year, last_release_date_year, last_release_date,
+    hatchery_location_name,
+    stock_location_name,
+    rearing_type,
+    release_location_code, release_location_name, 
+    cwt_1st_mark, cwt_1st_mark_count, 
+    cwt_2nd_mark, cwt_2nd_mark_count, 
+    non_cwt_1st_mark, non_cwt_1st_mark_count, 
+    non_cwt_2nd_mark, non_cwt_2nd_mark_count,
+    tagged_adclipped, tagged_unclipped, 
+    untagged_adclipped, untagged_unclipped, untagged_unknown
+    ) |> 
+  tibble::rowid_to_column("uid")
+```
+
+```{r data_in_pef}
+# #MB filters on rel_age==2 (constructing 'Match4' obj)
+# Match2$rel_age = Match2$last_release_date_year - Match2$brood_year
+# #but then groups on Run_ID (corresponding to recovery/fishing year?)
+# Match4$Run_ID = (Match4$brood_year + 3)
+# # but this seems like it potentially removes relevant releases?
+# rmis_rel_all |> filter(tag_code == "!142017UH001")
+
+data_in$pef <- rmis_rel_all |> 
+  drop_na(last_release_date_year, release_location_name) |>
+  filter(
+    rearing_type %in% c("H","M"), #drop 'W', only a single 'M' in 2010onward file
+    last_release_date_year - brood_year == 2
+  ) |> 
+  mutate(
+    year = brood_year + 3,
+    rel_sum = tagged_adclipped + tagged_unclipped + untagged_adclipped + untagged_unclipped + untagged_unknown,
+    #rel_ad = tagged_adclipped + untagged_adclipped,
+    rel_adcwt = tagged_adclipped
+  ) |> 
+  left_join(lu$rmis_fram_pr_mu, by = "release_location_name") |> 
+  drop_na(StockID, PR_MU) |> 
+  group_by(year, StockID, PR_MU) |> 
+  summarise(
+    across(c(starts_with("rel_"), contains("agged")), sum),
+    #pef_ad = rel_sum / rel_ad,
+    pef_adcwt = rel_sum / rel_adcwt,
+    .groups = "drop"
+  )
+
+```
+
+# Run reconstruction 
+
+```{r shared_intermediates}
+#potential PR_MUs in relevant CAs, now with both HR_Flag and CWT_Flag
+rr$pr_ca_mu <- lu$ca_pr_mu_flagged |> 
+  filter(HR_Flag == 1) |> 
+  select(year, PR_Number, CA_Number, CA_Short_Name, PR_MU, MU_Short_Name, HR_Flag, CWT_Flag, MSF_Flag)
+
+#expanded CWT estimated_number values
+rr$cwt_pef <- data_in$cwt |> 
+  select(year, CA_Number, PR_MU, est_num) |> 
+  inner_join(
+    rr$pr_ca_mu |> 
+      filter(CWT_Flag==1) |> 
+      select(year, CA_Number, PR_MU, CWT_Flag)
+    ,
+    by = c("year","CA_Number", "PR_MU")
+    ) |> 
+  left_join(data_in$pef |> select(year, PR_MU, pef_adcwt), by = c("year", "PR_MU")) |> 
+  mutate(cwt_pef = est_num * pef_adcwt)
+
+
+#original catch values before deducting expanded CWT-catch
+rr$catch <- data_in$catch |>
+  semi_join(rr$pr_ca_mu, by = c("year", "CA_Number"))
+##for 2020 testing against MB
+rr$catch <- rr$catch |> 
+  mutate(catch = if_else(year ==2020 & CA_Number == 563, 13357, catch))
+
+#catch values after deducting total CWT-catch summed across relevant PR_MUs
+rr$catch_less_cwt <- rr$catch |> 
+  left_join(
+    rr$cwt_pef |> 
+      group_by(year, CA_Number) |> 
+      summarise(cwt_pef_sum = sum(cwt_pef), .groups = "drop")
+    ,
+    by = c("year", "CA_Number")
+  ) |> 
+  mutate(catch_less_cwt = catch - cwt_pef_sum) 
+
+
+#relevant escapement
+rr$escp <- data_in$escp |> 
+  select(year, PR_MU, escp) |> 
+  semi_join(rr$pr_ca_mu, by = c("year", "PR_MU"))
+
+#begin run size as escapement
+rr$run_size <- rr$escp |> 
+  mutate(rs = as.numeric(escp))
+
+```
+
+```{r loop_de_loop}
+if(any(grepl("pr_temp", ls()))) { rm(pr_temp)}
+
+rr$out <- tibble(
+  year = numeric(),
+  PR_Number = numeric(),
+  CA_Number = numeric(),
+  CA_Short_Name = character(),
+  PR_MU = character(), 
+  MU_Short_Name = character(),
+  catch_pr_mu = numeric()
+)
+
+for (pr_num in 1:6){
+  #sequential fisheries to evaluate
+  ca_seq <- rr$pr_ca_mu |> 
+    filter(PR_Number == pr_num) |> 
+    pull(CA_Number) |> unique() |> sort(decreasing = T)
+
+  #calc first fishery/CA outside of CA-for-loop
+  pr_temp <- rr$pr_ca_mu |> 
+    filter(PR_Number == pr_num, CA_Number == ca_seq[1]) |> 
+    left_join(rr$run_size, by = c("year", "PR_MU")) |> 
+    left_join(rr$catch_less_cwt, by = c("year", "CA_Number", "CA_Short_Name")) |> 
+    left_join(rr$cwt_pef |> select(year, CA_Number, PR_MU, cwt_pef), by = c("year", "CA_Number", "PR_MU")) |> 
+    group_by(year, PR_Number, CA_Number) |> 
+    mutate(
+      #sum over MUs in the CA not defined by CWTs
+      rs_tot = sum(rs[is.na(cwt_pef)]),
+      rs_pct = if_else(is.na(cwt_pef), rs / rs_tot, 0),
+      catch_to_split = if_else(is.na(catch_less_cwt), catch, catch_less_cwt),
+      catch_pr_mu = if_else(
+        is.na(cwt_pef),
+        catch_to_split * rs_pct,
+        cwt_pef
+        ) |> 
+        replace_na(0),
+      rs = rs + catch_pr_mu
+    ) |> 
+    ungroup()
+
+  #overwrite with newly-catch-augmented RS
+  rr$run_size <- rows_upsert(
+    rr$run_size,
+    pr_temp |> select(year, PR_MU, rs),
+    by = c("year", "PR_MU"))
+  #preserve
+  rr$out <- rows_upsert(
+    rr$out,
+    pr_temp |>
+      select(year, PR_Number, CA_Number, CA_Short_Name,
+             PR_MU, MU_Short_Name, catch_pr_mu),
+    by = c("year","PR_Number","CA_Number","CA_Short_Name",
+           "PR_MU","MU_Short_Name"))
+  
+  #now cycle remaining CAs in the PR
+  for (ca in ca_seq[-1]) {
+    pr_temp <- rr$pr_ca_mu |> 
+      filter(PR_Number == pr_num, CA_Number == ca) |> 
+      left_join(rr$run_size, by = c("year", "PR_MU")) |> 
+      left_join(rr$catch_less_cwt, by = c("year", "CA_Number", "CA_Short_Name")) |> 
+      left_join(rr$cwt_pef |> select(year, CA_Number, PR_MU, cwt_pef), by = c("year", "CA_Number", "PR_MU")) |> 
+      group_by(year, PR_Number, CA_Number) |> 
+      mutate(
+        #sum over MUs in the CA not defined by CWTs
+        rs_tot = sum(rs[is.na(cwt_pef)]),
+        rs_pct = if_else(is.na(cwt_pef), rs / rs_tot, 0),
+        catch_to_split = if_else(is.na(catch_less_cwt), catch, catch_less_cwt),
+        catch_pr_mu = if_else(
+          is.na(cwt_pef),
+          catch_to_split * rs_pct,
+          cwt_pef
+        ) |> 
+          replace_na(0),
+        rs = rs + catch_pr_mu
+      ) |> 
+      ungroup()
+    
+    #overwrite with newly-catch-augmented RS
+    rr$run_size <- rows_upsert(
+      rr$run_size,
+      pr_temp |> select(year, PR_MU, rs),
+      by = c("year", "PR_MU"))
+    #preserve
+    rr$out <- rows_upsert(
+      rr$out,
+      pr_temp |>
+        select(year, PR_Number, CA_Number, CA_Short_Name,
+               PR_MU, MU_Short_Name, catch_pr_mu),
+      by = c("year","PR_Number","CA_Number","CA_Short_Name",
+             "PR_MU","MU_Short_Name"))
+    
+  } #end CA-for-loop
+
+} #end PR-for-loop
+
+rm(pr_temp)
+```
+
+```{r}
+rr$out |> 
+  arrange(year, PR_Number, CA_Number, as.integer(str_sub(PR_MU, 3, 10))) |> 
+  left_join(rr$escp, by = c("year", "PR_MU")) |> 
+  unite("ca", starts_with("CA_")) |> 
+  #filter(year==2020) |> 
+  split(~PR_Number) |> 
+  map(
+    ~.x |> 
+      pivot_wider(names_from = ca, values_from = catch_pr_mu)
+  ) |> 
+  c(rr) |> 
+  writexl::write_xlsx("~/T/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/temp_qaqc_2020.xlsx")
+
+```
+
+compare against *PScohoRR_TRS_2010-2020_Updated_2022-01-31_wHoodCanal.xlsx*
+and notes in *CohoRunReconstruction_2020LoadInputs_MB011222.docx*
+
