@@ -1,5 +1,5 @@
 ---
-title: "rrCoho overview"
+title: "rrCoho 2021"
 author: "Dan.Auerbach@dfw.wa.gov"
 date: "`r Sys.Date()`"
 editor_options: 
@@ -25,7 +25,7 @@ if(grepl("apple", sessionInfo()$platform)){
   file_path <- list(
     escp = "~/T/DFW-Salmon Mgmt Modeling Team - General/Escapement files/Coho/fram_coho_escapement_2023.xlsx",
     crc_mdb = "~/T/DFW-Salmon Mgmt Modeling Team - General/Catch datasets/CRC/Sport Harvest Estimates 20221116.mdb",
-    tocas = "~/T/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/2021/tocas_coho_2000-present.csv",
+    tocas = "~/T/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/2021/CohoRR_sthurner_Tocas_11-01-2023_14_38_41.csv",
     rmis_rec = "~/T/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/2021/rmis_recs_2019_2022.csv",
     rmis_all_rel = "~/T/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/2021/rmis_releases_all_coho_by2010_onward.csv",
     lu_xlsx = "~/O/code/framr/xlsx/lu_coho.xlsx"
@@ -34,13 +34,12 @@ if(grepl("apple", sessionInfo()$platform)){
   file_path <-   list(
     escp = "T:/DFW-Salmon Mgmt Modeling Team - General/Escapement files/Coho/fram_coho_escapement_2023.xlsx",
     crc_mdb = "T:/DFW-Salmon Mgmt Modeling Team - General/Catch datasets/CRC/Sport Harvest Estimates 20221116.mdb",
-    tocas = "T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/2021/tocas_coho_2000-present.csv",
+    tocas = "T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/2021/CohoRR_sthurner_Tocas_11-01-2023_14_38_41.csv",
     rmis_rec = "T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/2021/rmis_recs_2019_2022.csv",
     rmis_all_rel = "T:/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/2021/rmis_releases_all_coho_by2010_onward.csv",
     lu_xlsx = "O:/code/framr/xlsx/lu_coho.xlsx"
   )
 }
-
 
 #fixed lookups from CRC, TOCAS, and RMIS to FRAM FisheryID and RMIS to PR_MU/StockID
 lu <- map(
@@ -57,7 +56,6 @@ lu$ca_pr_mu_flagged <- readxl::read_excel("ca_pr_mu_flagged.xlsx")
 
 data_in <- list()
 rr <- list()
-
 ```
 
 https://fisheriesservices.nwifc.org/fram-model-runs/preseason-fram-model-preparation/salmon-run-reconstruction-puget-sound/
@@ -81,9 +79,7 @@ data_in$escp <- readxl::read_excel(
     )
 ```
 
-# Catches
-
-## Recreational: CRC
+# Sport catches from CRC
 
 Refactored from *CohoFRAM_PostSeasonwMZ_RR_SportFisheryInputs_111021.R*
   - Persisted removal of AreaCode == 192
@@ -176,7 +172,7 @@ data_in$crc_ca <- data_in$crc |>
   )
 ```
 
-## Commercial: TOCAS
+# Commercial catches from TOCAS
 
 Refactored from *CohoFRAM_PostSeason_RR_CommCatchInputs_MB121621*
 
@@ -200,9 +196,12 @@ Refactored from *CohoFRAM_PostSeason_RR_CommCatchInputs_MB121621*
 
 ```{r read_tocas}
 data_in$tocas <- read_csv(file_path$tocas) |> 
+  rename_with(~str_remove_all(str_squish(.), " ")) |> 
+  drop_na(Units, FisherType) |> 
   filter(Disposition %in% c("C&SF", "COMM", "ORGN", "TEST","TKHM")) |> 
   mutate(
-    landing_date = as.Date(Landing_Date, format = "%m/%d/%Y"),
+    #landing_date = as.Date(Landing_Date, format = "%m/%d/%Y"),
+    landing_date = as.Date(CatchDate, format = "%m/%d/%Y"),
     month = lubridate::month(landing_date),
     year = lubridate::year(landing_date),
     ts = case_when(
@@ -216,12 +215,13 @@ data_in$tocas <- read_csv(file_path$tocas) |>
 
 ```{r data_in_tocas_ca}
 data_in$tocas_ca <- data_in$tocas |> 
-  group_by(year, ts, Fishery, TribeName, Gear, Disposition, Catch_Area) |> 
+  #group_by(year, ts, Fishery, TribeName, Gear, Disposition, Catch_Area) |> 
+  group_by(year, ts, FisherType, TribeName, Gear, Disposition, CatchArea) |> 
   summarise(catch = sum(Units), .groups = "drop") |> 
   mutate(TribeName = if_else(TribeName %in% c("QUINAULT - 18", "CHEHALIS - 02"), TribeName, NA_character_)) |> 
   left_join(
     lu$tocas_fram |> separate_rows(Disposition) |> separate_rows(Gear) |> mutate(Gear = as.integer(Gear)),
-    by = c("Fishery", "TribeName", "Gear", "Disposition", "Catch_Area")
+    by = c("FisherType", "TribeName", "Gear", "Disposition", "CatchArea")
   ) |> 
   drop_na(FisheryID) |> 
   inner_join(lu$fram_ca, by = "FisheryID") |> 
@@ -622,6 +622,7 @@ for (pr_num in 1:6){
         rs = rs + catch_pr_mu
       ) |> 
       ungroup()
+    #pr_temp #dev/testing
     
     #overwrite with newly-catch-augmented RS
     rr$run_size <- rows_upsert(
@@ -656,10 +657,6 @@ rr$out |>
       pivot_wider(names_from = ca, values_from = catch_pr_mu)
   ) |> 
   c(rr) |> 
-  writexl::write_xlsx("~/T/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/rrterm/temp_qaqc_2020.xlsx")
+  writexl::write_xlsx("~/T/DFW-Salmon Mgmt Modeling Team - General/PS Coho Run Reconstruction/2021/temp_qaqc_2021.xlsx")
 
 ```
-
-compare against *PScohoRR_TRS_2010-2020_Updated_2022-01-31_wHoodCanal.xlsx*
-and notes in *CohoRunReconstruction_2020LoadInputs_MB011222.docx*
-
