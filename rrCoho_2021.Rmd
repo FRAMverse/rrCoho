@@ -512,7 +512,11 @@ rr$cwt_pef <- data_in$cwt |>
     by = c("year","CA_Number", "PR_MU")
     ) |> 
   left_join(data_in$pef |> select(year, PR_MU, pef_adcwt), by = c("year", "PR_MU")) |> 
-  mutate(cwt_pef = est_num * pef_adcwt)
+  mutate(
+    #Tulalip one-off adjustment per MB spreadsheet approach of matching target provided by Diego H
+    est_num = if_else(year == 2021 & CA_Number == 583 & PR_MU == "3_3", 3827, est_num),
+    cwt_pef = est_num * pef_adcwt
+    )
 
 
 #original catch values before deducting expanded CWT-catch
@@ -654,6 +658,7 @@ rr$out |>
   split(~PR_Number) |> 
   map(
     ~.x |> 
+      mutate(catch_pr_mu = round(catch_pr_mu)) |> 
       pivot_wider(names_from = ca, values_from = catch_pr_mu)
   ) |> 
   c(rr) |> 
